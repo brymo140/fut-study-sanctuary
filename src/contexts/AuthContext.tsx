@@ -35,14 +35,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [roleLoading, setRoleLoading] = useState(true);
 
   const loadProfile = async (uid: string) => {
+    setRoleLoading(true);
     const [{ data: profileData }, { data: roles }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
     ]);
     setProfile(profileData as Profile | null);
     setIsAdmin(!!roles?.some((r) => r.role === "admin"));
+    setRoleLoading(false);
 
     // Update streak / last_active
     if (profileData) {
@@ -69,6 +72,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setProfile(null);
         setIsAdmin(false);
+        setRoleLoading(false);
       }
     });
 
@@ -78,6 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (s?.user) {
         loadProfile(s.user.id).finally(() => setLoading(false));
       } else {
+        setRoleLoading(false);
         setLoading(false);
       }
     });
@@ -95,7 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, profile, isAdmin, loading, refreshProfile, signOut }}
+      value={{ session, user, profile, isAdmin, loading, roleLoading, refreshProfile, signOut }}
     >
       {children}
     </AuthContext.Provider>
