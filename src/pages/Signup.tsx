@@ -1,0 +1,169 @@
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/Logo";
+import { supabase } from "@/integrations/supabase/client";
+import { z } from "zod";
+import { toast } from "sonner";
+import { ArrowRight } from "lucide-react";
+
+const schema = z.object({
+  full_name: z.string().trim().min(2, "Name is too short").max(100),
+  email: z.string().trim().email("Enter a valid email").max(255),
+  password: z.string().min(6, "Password must be at least 6 characters").max(100),
+  level: z.enum(["100L", "200L", "300L", "400L", "500L"]),
+  department: z.string().trim().min(2, "Enter your department").max(100),
+  matric_no: z.string().trim().max(50).optional().or(z.literal("")),
+});
+
+const Signup = () => {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    password: "",
+    level: "100L" as "100L" | "200L" | "300L" | "400L" | "500L",
+    department: "",
+    matric_no: "",
+  });
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = schema.safeParse(form);
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0].message);
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.signUp({
+      email: form.email,
+      password: form.password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/`,
+        data: { full_name: form.full_name },
+      },
+    });
+    if (error) {
+      toast.error(error.message.includes("already") ? "Email already registered. Try logging in." : error.message);
+      setLoading(false);
+      return;
+    }
+
+    // Wait for session, then update profile
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("profiles").update({
+        full_name: form.full_name,
+        level: form.level,
+        department: form.department,
+        matric_no: form.matric_no || null,
+      }).eq("id", user.id);
+    }
+
+    sessionStorage.setItem("signup_partial", "1");
+    navigate("/signup/profile");
+  };
+
+  return (
+    <div className="min-h-screen">
+      <div className="app-shell px-6 py-8">
+        <div className="flex justify-center mb-6">
+          <Logo size="md" />
+        </div>
+
+        <h1 className="text-2xl font-bold text-foreground mb-1">Create your account</h1>
+        <p className="text-sm text-muted-foreground mb-6">Step 1 of 2 · Tell us about yourself</p>
+
+        <form onSubmit={submit} className="space-y-4">
+          <Field label="Full name">
+            <input
+              type="text" required value={form.full_name}
+              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+              className="input-base" placeholder="Akorede Ibrahim"
+            />
+          </Field>
+          <Field label="Email">
+            <input
+              type="email" required value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="input-base" placeholder="you@futminna.edu.ng"
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              type="password" required value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className="input-base" placeholder="At least 6 characters" minLength={6}
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Level">
+              <select
+                value={form.level}
+                onChange={(e) => setForm({ ...form, level: e.target.value as typeof form.level })}
+                className="input-base"
+              >
+                <option>100L</option><option>200L</option><option>300L</option><option>400L</option><option>500L</option>
+              </select>
+            </Field>
+            <Field label="Department">
+              <input
+                type="text" required value={form.department}
+                onChange={(e) => setForm({ ...form, department: e.target.value })}
+                className="input-base" placeholder="Comp Sci"
+              />
+            </Field>
+          </div>
+          <Field label="Matric number (optional)">
+            <input
+              type="text" value={form.matric_no}
+              onChange={(e) => setForm({ ...form, matric_no: e.target.value })}
+              className="input-base" placeholder="2020/1/12345CS"
+            />
+          </Field>
+
+          <Button type="submit" disabled={loading} size="lg" className="w-full bg-gradient-button border border-primary/40 text-primary h-12 rounded-xl font-semibold mt-2">
+            {loading ? "Creating…" : <>Continue <ArrowRight className="h-4 w-4 ml-2" /></>}
+          </Button>
+        </form>
+
+        <div className="flex justify-center gap-1.5 mt-6">
+          <span className="h-1.5 w-6 rounded-full bg-primary" />
+          <span className="h-1.5 w-6 rounded-full bg-border" />
+        </div>
+
+        <p className="text-center text-sm text-muted-foreground mt-6">
+          Already have an account?{" "}
+          <Link to="/login" className="text-primary font-medium hover:underline">
+            Login
+          </Link>
+        </p>
+
+        <style>{`
+          .input-base {
+            width: 100%;
+            background-color: hsl(var(--surface));
+            border: 1px solid hsl(var(--border));
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            color: hsl(var(--foreground));
+            outline: none;
+            transition: border-color 0.15s;
+          }
+          .input-base:focus { border-color: hsl(var(--primary)); }
+        `}</style>
+      </div>
+    </div>
+  );
+};
+
+const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div>
+    <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
+    {children}
+  </div>
+);
+
+export default Signup;
