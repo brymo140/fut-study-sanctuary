@@ -89,12 +89,12 @@ const Home = () => {
               <span>{profile?.streak}</span>
             </div>
           )}
-          <button aria-label="Announcements" className="relative h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary">
+          <button onClick={() => setAnnOpen(true)} aria-label="Announcements" className="relative h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary">
             <Megaphone className="h-4 w-4 text-foreground/80" />
           </button>
-          <button aria-label="Notifications" className="relative h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary">
+          <button onClick={() => setNotifOpen(true)} aria-label="Notifications" className="relative h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary">
             <Bell className="h-4 w-4 text-foreground/80" />
-            <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-destructive" />
+            {hasUnread && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-destructive" />}
           </button>
           <button
             onClick={() => navigate("/profile")}
