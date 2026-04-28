@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          is_active: boolean
           target_level: Database["public"]["Enums"]["student_level"] | null
           title: string
         }
@@ -28,6 +29,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_active?: boolean
           target_level?: Database["public"]["Enums"]["student_level"] | null
           title: string
         }
@@ -36,8 +38,33 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_active?: boolean
           target_level?: Database["public"]["Enums"]["student_level"] | null
           title?: string
+        }
+        Relationships: []
+      }
+      app_settings: {
+        Row: {
+          adsense_publisher_id: string | null
+          app_tagline: string | null
+          id: number
+          maintenance_mode: boolean
+          updated_at: string
+        }
+        Insert: {
+          adsense_publisher_id?: string | null
+          app_tagline?: string | null
+          id?: number
+          maintenance_mode?: boolean
+          updated_at?: string
+        }
+        Update: {
+          adsense_publisher_id?: string | null
+          app_tagline?: string | null
+          id?: number
+          maintenance_mode?: boolean
+          updated_at?: string
         }
         Relationships: []
       }
@@ -222,6 +249,7 @@ export type Database = {
           faculty: string | null
           full_name: string
           id: string
+          is_banned: boolean
           last_active: string | null
           level: Database["public"]["Enums"]["student_level"] | null
           matric_no: string | null
@@ -237,6 +265,7 @@ export type Database = {
           faculty?: string | null
           full_name?: string
           id: string
+          is_banned?: boolean
           last_active?: string | null
           level?: Database["public"]["Enums"]["student_level"] | null
           matric_no?: string | null
@@ -252,6 +281,7 @@ export type Database = {
           faculty?: string | null
           full_name?: string
           id?: string
+          is_banned?: boolean
           last_active?: string | null
           level?: Database["public"]["Enums"]["student_level"] | null
           matric_no?: string | null
