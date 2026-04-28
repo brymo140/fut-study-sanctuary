@@ -5,6 +5,8 @@ import { Logo } from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
+import { AnnouncementsSheet } from "@/components/AnnouncementsSheet";
+import { NotificationsSheet } from "@/components/NotificationsSheet";
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 
