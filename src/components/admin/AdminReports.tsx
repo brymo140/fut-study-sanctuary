@@ -62,7 +62,7 @@ export const AdminReports = () => {
               <tr key={r.id}>
                 <Td className="font-medium max-w-[160px] truncate">{r.pdf_title}</Td>
                 <Td>{r.reporter_name}</Td>
-                <Td className="max-w-[200px] truncate" title={r.reason}>{r.reason}</Td>
+                <Td className="max-w-[200px] truncate"><span title={r.reason}>{r.reason}</span></Td>
                 <Td className="text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</Td>
                 <Td>
                   <div className="flex gap-1">
