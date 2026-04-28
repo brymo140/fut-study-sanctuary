@@ -51,6 +51,22 @@ const Home = () => {
     load();
   }, [activeLevel]);
 
+  // Unread badge: any announcement or pdf newer than last seen timestamp
+  useEffect(() => {
+    const check = async () => {
+      const lastSeen = localStorage.getItem("notifs:lastSeen") || new Date(Date.now() - 7 * 86400000).toISOString();
+      const [{ data: ann }, { data: pdfs }] = await Promise.all([
+        supabase.from("announcements").select("id,target_level,created_at").gt("created_at", lastSeen).limit(20),
+        supabase.from("pdfs").select("id,level,created_at").gt("created_at", lastSeen).limit(20),
+      ]);
+      const lvl = profile?.level ?? null;
+      const annHit = (ann || []).some((a: any) => !a.target_level || !lvl || a.target_level === lvl);
+      const pdfHit = (pdfs || []).some((p: any) => !lvl || p.level === lvl);
+      setHasUnread(annHit || pdfHit);
+    };
+    check();
+  }, [profile?.level, notifOpen]);
+
   const initials = (profile?.full_name || profile?.email || "U")
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
 
