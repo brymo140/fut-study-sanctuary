@@ -117,9 +117,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
   };
 
+  const roleLabel: "Admin" | "Class Rep" | "Student" = isAdmin ? "Admin" : isRep ? "Class Rep" : "Student";
+
   return (
     <AuthContext.Provider
-      value={{ session, user, profile, isAdmin, loading, roleLoading, refreshProfile, signOut }}
+      value={{ session, user, profile, isAdmin, isRep, roleLabel, loading, roleLoading, refreshProfile, signOut }}
     >
       {children}
     </AuthContext.Provider>
