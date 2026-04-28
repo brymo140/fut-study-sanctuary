@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
+import { AuthBack } from "@/components/AuthBack";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -69,6 +70,7 @@ const SignupProfile = () => {
   return (
     <div className="min-h-screen">
       <div className="app-shell px-6 py-8">
+        <AuthBack to="/signup" />
         <div className="flex justify-center mb-6">
           <Logo size="md" />
         </div>

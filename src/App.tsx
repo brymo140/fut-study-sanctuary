@@ -11,6 +11,8 @@ import Welcome from "./pages/Welcome";
 import Signup from "./pages/Signup";
 import SignupProfile from "./pages/SignupProfile";
 import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Home from "./pages/Home";
 import Browse from "./pages/Browse";
 import PdfDetail from "./pages/PdfDetail";
@@ -41,6 +43,8 @@ const App = () => (
             <Route path="/signup" element={<Signup />} />
             <Route path="/signup/profile" element={<SignupProfile />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
 
             <Route path="/" element={<Protected><Home /></Protected>} />
             <Route path="/browse" element={<Protected><Browse /></Protected>} />

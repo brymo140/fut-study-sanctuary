@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, Star, Lock, Play, Check, Download, ShieldCheck, Bookmark, Flag } from "lucide-react";
+import { ArrowLeft, FileText, Star, Lock, Play, Check, Download, ShieldCheck, Bookmark, Flag, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { WatchToUnlockModal } from "@/components/WatchToUnlockModal";
+import { PdfViewer } from "@/components/PdfViewer";
 import { toast } from "sonner";
 
 interface Pdf {
@@ -27,6 +28,7 @@ const PdfDetail = () => {
   const [bookmarked, setBookmarked] = useState(false);
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [unlockChapter, setUnlockChapter] = useState<Chapter | null>(null);
+  const [viewChapter, setViewChapter] = useState<Chapter | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
@@ -217,7 +219,14 @@ const PdfDetail = () => {
                       </p>
                     </div>
                     {isDownloaded ? (
-                      <span className="badge-green">Downloaded</span>
+                      <Button
+                        size="sm"
+                        onClick={() => setViewChapter(ch)}
+                        variant="outline"
+                        className="bg-surface border-success/40 text-success text-xs h-8"
+                      >
+                        <Eye className="h-3 w-3 mr-1" /> Read
+                      </Button>
                     ) : isNext ? (
                       <Button
                         size="sm"
@@ -286,6 +295,14 @@ const PdfDetail = () => {
         chapterTitle={unlockChapter?.title || ""}
         onClose={() => setUnlockChapter(null)}
         onUnlocked={handleUnlocked}
+      />
+
+      <PdfViewer
+        open={!!viewChapter}
+        onOpenChange={(v) => !v && setViewChapter(null)}
+        storagePath={viewChapter?.storage_path ?? null}
+        title={viewChapter ? `Ch ${viewChapter.chapter_number} · ${viewChapter.title}` : undefined}
+        fileName={viewChapter ? `${pdf?.course_code || "chapter"}-${viewChapter.chapter_number}.pdf` : undefined}
       />
     </div>
   );

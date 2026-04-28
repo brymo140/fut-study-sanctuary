@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
+import { AuthBack } from "@/components/AuthBack";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -36,8 +37,8 @@ const Signup = () => {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: form.email,
+    const { data: signupData, error } = await supabase.auth.signUp({
+      email: form.email.trim(),
       password: form.password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
@@ -50,7 +51,20 @@ const Signup = () => {
       return;
     }
 
-    // Wait for session, then update profile
+    // With auto-confirm on, signUp returns a session immediately. If not, sign in explicitly.
+    if (!signupData.session) {
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: form.email.trim(),
+        password: form.password,
+      });
+      if (signInErr) {
+        toast.error("Account created. Please log in to continue.");
+        setLoading(false);
+        navigate("/login");
+        return;
+      }
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase.from("profiles").update({
@@ -62,12 +76,14 @@ const Signup = () => {
     }
 
     sessionStorage.setItem("signup_partial", "1");
-    navigate("/signup/profile");
+    setLoading(false);
+    navigate("/signup/profile", { replace: true });
   };
 
   return (
     <div className="min-h-screen">
       <div className="app-shell px-6 py-8">
+        <AuthBack to="/welcome" />
         <div className="flex justify-center mb-6">
           <Logo size="md" />
         </div>
@@ -80,7 +96,7 @@ const Signup = () => {
             <input
               type="text" required value={form.full_name}
               onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-              className="input-base" placeholder="Akorede Ibrahim"
+              className="input-base" placeholder="Your full name"
             />
           </Field>
           <Field label="Email">
