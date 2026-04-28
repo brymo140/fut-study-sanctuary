@@ -201,6 +201,8 @@ const Home = () => {
         )}
       </Section>
 
+      <BannerAd />
+
       {/* Recently added */}
       <Section title="Recently added" subtitle="Fresh uploads from class reps">
         {filteredRecent.length === 0 ? (
