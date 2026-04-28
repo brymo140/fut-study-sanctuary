@@ -23,10 +23,10 @@ const TABS: { key: TabKey; label: string; icon: any }[] = [
 ];
 
 const Admin = () => {
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin, loading, roleLoading, session } = useAuth();
   const [tab, setTab] = useState<TabKey>("dashboard");
 
-  if (loading) {
+  if (loading || (session && roleLoading)) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
