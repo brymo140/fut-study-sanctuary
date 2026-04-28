@@ -81,7 +81,6 @@ const PdfDetail = () => {
 
     // Record download + XP
     await supabase.from("downloads").insert({ user_id: user.id, chapter_id: ch.id, pdf_id: id });
-    await supabase.rpc("noop"); // placeholder; we increment xp below
     const { data: prof } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
     await supabase.from("profiles").update({ xp: (prof?.xp || 0) + 10 }).eq("id", user.id);
     refreshProfile();
