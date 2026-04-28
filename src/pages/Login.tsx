@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
+import { AuthBack } from "@/components/AuthBack";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { toast } from "sonner";
@@ -21,13 +22,20 @@ const Login = () => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
     if (error) {
-      toast.error(error.message.includes("Invalid") ? "Wrong email or password" : error.message);
+      const msg = error.message || "";
+      if (msg.toLowerCase().includes("email not confirmed")) {
+        toast.error("Email not confirmed yet. Check your inbox.");
+      } else if (msg.toLowerCase().includes("invalid")) {
+        toast.error("Wrong email or password");
+      } else {
+        toast.error(msg);
+      }
       return;
     }
-    navigate("/", { replace: true });
+    if (data.session) navigate("/", { replace: true });
   };
 
   const google = async () => {
@@ -37,8 +45,9 @@ const Login = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="app-shell px-6 py-12">
-        <div className="flex justify-center mb-8">
+      <div className="app-shell px-6 py-8">
+        <AuthBack to="/welcome" />
+        <div className="flex justify-center mb-6">
           <Logo size="md" />
         </div>
 
@@ -58,7 +67,7 @@ const Login = () => {
           <div>
             <div className="flex justify-between items-center mb-1.5">
               <label className="text-xs font-medium text-muted-foreground">Password</label>
-              <button type="button" className="text-xs text-primary hover:underline">Forgot password?</button>
+              <Link to="/forgot-password" className="text-xs text-primary hover:underline">Forgot password?</Link>
             </div>
             <input
               type="password" required value={password}
