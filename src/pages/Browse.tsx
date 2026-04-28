@@ -17,7 +17,7 @@ const Browse = () => {
     const load = async () => {
       let q = supabase.from("pdfs").select("*").order("created_at", { ascending: false });
       q = q.eq("is_past_question", tab === "past");
-      if (level !== "All") q = q.eq("level", level);
+      if (level !== "All") q = q.eq("level", level as "100L");
       const { data } = await q;
       setPdfs((data as PdfSummary[]) || []);
     };

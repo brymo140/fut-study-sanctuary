@@ -34,8 +34,8 @@ const Home = () => {
       const chQ = supabase.from("youtube_channels").select("id,channel_name,channel_url,thumbnail_url,level").eq("is_active", true).order("created_at", { ascending: false }).limit(8);
 
       if (activeLevel !== "All") {
-        trendingQ.eq("level", activeLevel);
-        recentQ.eq("level", activeLevel);
+        trendingQ.eq("level", activeLevel as "100L");
+        recentQ.eq("level", activeLevel as "100L");
       }
 
       const [{ data: t }, { data: r }, { data: c }] = await Promise.all([trendingQ, recentQ, chQ]);
