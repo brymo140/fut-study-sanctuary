@@ -40,7 +40,7 @@ const Welcome = () => {
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-3 mt-12">
           <Button asChild size="lg" className="w-full bg-gradient-button hover:bg-gradient-button border border-primary/40 text-primary text-base font-semibold h-12 rounded-xl">
             <Link to="/signup">Create account</Link>
           </Button>
