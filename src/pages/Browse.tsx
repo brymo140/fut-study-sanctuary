@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Search, SlidersHorizontal, LayoutGrid, List as ListIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
+import { BannerAd } from "@/components/BannerAd";
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 type Tab = "materials" | "past";

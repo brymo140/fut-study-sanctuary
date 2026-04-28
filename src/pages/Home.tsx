@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
 import { AnnouncementsSheet } from "@/components/AnnouncementsSheet";
 import { NotificationsSheet } from "@/components/NotificationsSheet";
+import { BannerAd } from "@/components/BannerAd";
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 
@@ -66,6 +67,23 @@ const Home = () => {
     };
     check();
   }, [profile?.level, notifOpen]);
+
+  // Realtime: flash the bell when new announcements / pdfs arrive while the app is open
+  useEffect(() => {
+    const channel = supabase
+      .channel("home-notifs")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, (payload: any) => {
+        const lvl = profile?.level ?? null;
+        const t = payload.new?.target_level;
+        if (!t || !lvl || t === lvl) setHasUnread(true);
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "pdfs" }, (payload: any) => {
+        const lvl = profile?.level ?? null;
+        if (!lvl || payload.new?.level === lvl) setHasUnread(true);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.level]);
 
   const initials = (profile?.full_name || profile?.email || "U")
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
