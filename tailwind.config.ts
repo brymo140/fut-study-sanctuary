@@ -86,6 +86,18 @@ export default {
             height: "0",
           },
         },
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "slide-up": {
+          from: { opacity: "0", transform: "translateY(100%)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "pulse-glow": {
+          "0%, 100%": { boxShadow: "0 0 16px hsl(214 90% 60% / 0.4)" },
+          "50%": { boxShadow: "0 0 28px hsl(260 88% 66% / 0.6)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
