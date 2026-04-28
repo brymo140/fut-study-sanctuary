@@ -1,10 +1,10 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Flame, Award, LogOut, GraduationCap, Building2, BookOpen, Mail } from "lucide-react";
+import { Flame, Award, LogOut, GraduationCap, Building2, BookOpen, Hash, Mail, Shield, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const Profile = () => {
-  const { profile, isAdmin, signOut } = useAuth();
+  const { profile, isAdmin, roleLabel, signOut } = useAuth();
   const navigate = useNavigate();
 
   const initials = (profile?.full_name || profile?.email || "U")
@@ -25,8 +25,24 @@ const Profile = () => {
         </div>
         <h1 className="text-xl font-bold text-white">{profile?.full_name || "Student"}</h1>
         <p className="text-sm text-white/80 mt-0.5">{profile?.email}</p>
-        {isAdmin && <span className="badge-purple mt-2 inline-block">Admin</span>}
+        <span
+          className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+            isAdmin ? "bg-secondary/20 text-secondary" : roleLabel === "Class Rep" ? "bg-primary/20 text-primary" : "bg-white/15 text-white"
+          }`}
+        >
+          <Shield className="h-3 w-3" /> {roleLabel}
+        </span>
       </div>
+
+      {/* Admin entry point — always visible to admins */}
+      {isAdmin && (
+        <Button
+          onClick={() => navigate("/admin")}
+          className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+        >
+          Go to Admin Panel <ArrowRight className="h-4 w-4 ml-2" />
+        </Button>
+      )}
 
       {/* XP + Streak */}
       <div className="grid grid-cols-2 gap-3">
@@ -43,7 +59,7 @@ const Profile = () => {
         </div>
         <div className="surface-card p-4">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-muted-foreground">Day streak</span>
+            <span className="text-xs text-muted-foreground">Reading streak</span>
             <Flame className="h-4 w-4 text-warning" />
           </div>
           <p className="text-2xl font-bold text-warning">{profile?.streak || 0}</p>
@@ -53,17 +69,13 @@ const Profile = () => {
 
       {/* Info */}
       <div className="surface-card divide-y divide-border">
-        <Row icon={GraduationCap} label="Level" value={profile?.level || "—"} />
-        <Row icon={Building2} label="Department" value={profile?.department || "—"} />
-        <Row icon={BookOpen} label="Faculty" value={profile?.faculty || "—"} />
-        <Row icon={Mail} label="Matric No" value={profile?.matric_no || "—"} />
+        <Row icon={Mail} label="Email" value={profile?.email || "—"} />
+        <Row icon={GraduationCap} label="Level" value={profile?.level || "Not provided"} />
+        <Row icon={Building2} label="Department" value={profile?.department || "Not provided"} />
+        <Row icon={BookOpen} label="Faculty" value={profile?.faculty || "Not provided"} />
+        <Row icon={Hash} label="Matric No" value={profile?.matric_no || "Not provided"} />
+        <Row icon={Shield} label="Account role" value={roleLabel} />
       </div>
-
-      {isAdmin && (
-        <Button onClick={() => navigate("/admin")} variant="outline" className="w-full bg-surface border-secondary/40 text-secondary">
-          Open admin panel
-        </Button>
-      )}
 
       <Button
         onClick={async () => { await signOut(); navigate("/welcome"); }}
@@ -82,7 +94,7 @@ const Row = ({ icon: Icon, label, value }: any) => (
   <div className="flex items-center gap-3 px-4 py-3">
     <Icon className="h-4 w-4 text-muted-foreground" />
     <span className="text-sm text-muted-foreground flex-1">{label}</span>
-    <span className="text-sm font-medium">{value}</span>
+    <span className="text-sm font-medium text-right line-clamp-1 max-w-[55%]">{value}</span>
   </div>
 );
 
