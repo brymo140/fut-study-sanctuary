@@ -99,6 +99,8 @@ const Browse = () => {
           {filtered.map((p) => <PdfCard key={p.id} pdf={p} variant="trending" />)}
         </div>
       )}
+
+      <BannerAd className="pt-2" />
     </div>
   );
 };
