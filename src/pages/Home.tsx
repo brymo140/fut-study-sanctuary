@@ -193,6 +193,14 @@ const Home = () => {
           </div>
         )}
       </Section>
+
+      <AnnouncementsSheet open={annOpen} onOpenChange={setAnnOpen} userLevel={profile?.level} />
+      <NotificationsSheet
+        open={notifOpen}
+        onOpenChange={setNotifOpen}
+        userLevel={profile?.level}
+        onSeen={() => setHasUnread(false)}
+      />
     </div>
   );
 };
