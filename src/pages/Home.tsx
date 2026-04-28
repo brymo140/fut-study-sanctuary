@@ -5,6 +5,8 @@ import { Logo } from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
+import { AnnouncementsSheet } from "@/components/AnnouncementsSheet";
+import { NotificationsSheet } from "@/components/NotificationsSheet";
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 
@@ -24,6 +26,9 @@ const Home = () => {
   const [trending, setTrending] = useState<PdfSummary[]>([]);
   const [recent, setRecent] = useState<PdfSummary[]>([]);
   const [channels, setChannels] = useState<YTChannel[]>([]);
+  const [annOpen, setAnnOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -45,6 +50,22 @@ const Home = () => {
     };
     load();
   }, [activeLevel]);
+
+  // Unread badge: any announcement or pdf newer than last seen timestamp
+  useEffect(() => {
+    const check = async () => {
+      const lastSeen = localStorage.getItem("notifs:lastSeen") || new Date(Date.now() - 7 * 86400000).toISOString();
+      const [{ data: ann }, { data: pdfs }] = await Promise.all([
+        supabase.from("announcements").select("id,target_level,created_at").gt("created_at", lastSeen).limit(20),
+        supabase.from("pdfs").select("id,level,created_at").gt("created_at", lastSeen).limit(20),
+      ]);
+      const lvl = profile?.level ?? null;
+      const annHit = (ann || []).some((a: any) => !a.target_level || !lvl || a.target_level === lvl);
+      const pdfHit = (pdfs || []).some((p: any) => !lvl || p.level === lvl);
+      setHasUnread(annHit || pdfHit);
+    };
+    check();
+  }, [profile?.level, notifOpen]);
 
   const initials = (profile?.full_name || profile?.email || "U")
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
@@ -68,12 +89,12 @@ const Home = () => {
               <span>{profile?.streak}</span>
             </div>
           )}
-          <button aria-label="Announcements" className="relative h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary">
+          <button onClick={() => setAnnOpen(true)} aria-label="Announcements" className="relative h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary">
             <Megaphone className="h-4 w-4 text-foreground/80" />
           </button>
-          <button aria-label="Notifications" className="relative h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary">
+          <button onClick={() => setNotifOpen(true)} aria-label="Notifications" className="relative h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary">
             <Bell className="h-4 w-4 text-foreground/80" />
-            <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-destructive" />
+            {hasUnread && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-destructive" />}
           </button>
           <button
             onClick={() => navigate("/profile")}
@@ -172,6 +193,14 @@ const Home = () => {
           </div>
         )}
       </Section>
+
+      <AnnouncementsSheet open={annOpen} onOpenChange={setAnnOpen} userLevel={profile?.level} />
+      <NotificationsSheet
+        open={notifOpen}
+        onOpenChange={setNotifOpen}
+        userLevel={profile?.level}
+        onSeen={() => setHasUnread(false)}
+      />
     </div>
   );
 };
