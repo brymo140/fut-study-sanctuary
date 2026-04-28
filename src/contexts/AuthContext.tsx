@@ -21,11 +21,15 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   isAdmin: boolean;
+  isRep: boolean;
+  roleLabel: "Admin" | "Class Rep" | "Student";
   loading: boolean;
   roleLoading: boolean;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 }
+
+const ADMIN_EMAIL = "lawalibrahimakorede@gmail.com";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -34,6 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isRep, setIsRep] = useState(false);
   const [loading, setLoading] = useState(true);
   const [roleLoading, setRoleLoading] = useState(true);
 
@@ -44,7 +49,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       supabase.from("user_roles").select("role").eq("user_id", uid),
     ]);
     setProfile(profileData as Profile | null);
-    setIsAdmin(!!roles?.some((r) => r.role === "admin"));
+    let admin = !!roles?.some((r) => r.role === "admin");
+    const rep = !!roles?.some((r) => r.role === "rep");
+
+    // Safety net: if the hardcoded admin email is logged in but doesn't have
+    // the admin role yet (e.g. created before the trigger was in place),
+    // upsert it now so /admin works on the next render.
+    if (!admin && (profileData?.email || "").toLowerCase() === ADMIN_EMAIL) {
+      const { error: insertErr } = await supabase
+        .from("user_roles")
+        .insert({ user_id: uid, role: "admin" });
+      if (!insertErr) admin = true;
+    }
+
+    setIsAdmin(admin);
+    setIsRep(rep);
     setRoleLoading(false);
 
     // Update streak / last_active
