@@ -22,6 +22,7 @@ interface AuthContextType {
   profile: Profile | null;
   isAdmin: boolean;
   loading: boolean;
+  roleLoading: boolean;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 }
