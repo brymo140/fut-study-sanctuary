@@ -26,6 +26,9 @@ const Home = () => {
   const [trending, setTrending] = useState<PdfSummary[]>([]);
   const [recent, setRecent] = useState<PdfSummary[]>([]);
   const [channels, setChannels] = useState<YTChannel[]>([]);
+  const [annOpen, setAnnOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
 
   useEffect(() => {
     const load = async () => {
