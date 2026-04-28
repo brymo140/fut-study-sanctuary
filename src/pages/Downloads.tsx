@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { FileText, Download } from "lucide-react";
+import { FileText, Download, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { PdfViewer } from "@/components/PdfViewer";
 
 interface Item {
   id: string;
@@ -14,6 +15,7 @@ interface Item {
 const Downloads = () => {
   const { user } = useAuth();
   const [items, setItems] = useState<Item[]>([]);
+  const [view, setView] = useState<Item | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -47,13 +49,24 @@ const Downloads = () => {
         <div className="space-y-2.5">
           {items.map((it) => (
             <div key={it.id} className="surface-card p-3 flex items-center gap-3">
-              <div className="h-12 w-12 shrink-0 rounded-lg bg-gradient-cover flex items-center justify-center">
+              <button
+                onClick={() => setView(it)}
+                className="h-12 w-12 shrink-0 rounded-lg bg-gradient-cover flex items-center justify-center hover:opacity-90"
+                aria-label="Open"
+              >
                 <FileText className="h-5 w-5 text-white/90" />
-              </div>
-              <Link to={`/pdf/${it.pdf.id}`} className="flex-1 min-w-0">
+              </button>
+              <button onClick={() => setView(it)} className="flex-1 min-w-0 text-left">
                 <p className="text-sm font-semibold line-clamp-1">Ch {it.chapter.chapter_number}: {it.chapter.title}</p>
                 <p className="text-[11px] text-muted-foreground">{it.pdf.course_code} · {it.pdf.title}</p>
-              </Link>
+              </button>
+              <button
+                onClick={() => setView(it)}
+                aria-label="Read"
+                className="h-8 w-8 rounded-lg surface-elevated flex items-center justify-center hover:border-primary"
+              >
+                <Eye className="h-4 w-4 text-primary" />
+              </button>
               <button
                 onClick={() => redownload(it.chapter.storage_path, `${it.pdf.course_code}-ch${it.chapter.chapter_number}.pdf`)}
                 aria-label="Redownload"
@@ -65,6 +78,14 @@ const Downloads = () => {
           ))}
         </div>
       )}
+
+      <PdfViewer
+        open={!!view}
+        onOpenChange={(v) => !v && setView(null)}
+        storagePath={view?.chapter.storage_path ?? null}
+        title={view ? `Ch ${view.chapter.chapter_number} · ${view.chapter.title}` : undefined}
+        fileName={view ? `${view.pdf.course_code}-ch${view.chapter.chapter_number}.pdf` : undefined}
+      />
     </div>
   );
 };
