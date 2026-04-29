@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [roleLoading, setRoleLoading] = useState(true);
 
-  const loadProfile = async (uid: string) => {
+  const loadProfile = async (uid: string, sessionEmail?: string | null) => {
     setRoleLoading(true);
     const [{ data: profileData }, { data: roles }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
@@ -52,14 +52,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let admin = !!roles?.some((r) => r.role === "admin");
     const rep = !!roles?.some((r) => r.role === "rep");
 
-    // Safety net: if the hardcoded admin email is logged in but doesn't have
-    // the admin role yet (e.g. created before the trigger was in place),
-    // upsert it now so /admin works on the next render.
-    if (!admin && (profileData?.email || "").toLowerCase() === ADMIN_EMAIL) {
+    // Safety net: every login, if this is the hardcoded admin email
+    // (works for both email/password AND Google OAuth — uses session email
+    // so it triggers even before/without a profile row), make sure the
+    // admin role is present. Idempotent on every login.
+    const emailForCheck = (sessionEmail || profileData?.email || "").toLowerCase();
+    if (!admin && emailForCheck === ADMIN_EMAIL) {
+      // Insert if missing — duplicate is fine, unique constraint will no-op.
       const { error: insertErr } = await supabase
         .from("user_roles")
         .insert({ user_id: uid, role: "admin" });
-      if (!insertErr) admin = true;
+      if (!insertErr || insertErr.code === "23505") admin = true;
     }
 
     setIsAdmin(admin);
@@ -87,7 +90,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
-        setTimeout(() => loadProfile(newSession.user.id), 0);
+        setTimeout(() => loadProfile(newSession.user.id, newSession.user.email), 0);
       } else {
         setProfile(null);
         setIsAdmin(false);
@@ -99,7 +102,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        loadProfile(s.user.id).finally(() => setLoading(false));
+        loadProfile(s.user.id, s.user.email).finally(() => setLoading(false));
       } else {
         setRoleLoading(false);
         setLoading(false);
