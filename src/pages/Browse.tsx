@@ -92,15 +92,19 @@ const Browse = () => {
         </div>
       ) : view === "list" ? (
         <div className="space-y-2.5">
-          {filtered.map((p) => <PdfCard key={p.id} pdf={p} />)}
+          {filtered.map((p, i) => (
+            <div key={p.id} className="space-y-2.5">
+              <PdfCard pdf={p} />
+              {/* ADMOB READY — banner every 8 cards */}
+              {(i + 1) % 8 === 0 && i !== filtered.length - 1 && <BannerAd className="py-2" />}
+            </div>
+          ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {filtered.map((p) => <PdfCard key={p.id} pdf={p} variant="trending" />)}
         </div>
       )}
-
-      <BannerAd className="pt-2" />
     </div>
   );
 };
