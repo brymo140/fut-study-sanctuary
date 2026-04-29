@@ -1,7 +1,12 @@
+// ADMOB READY — swap placeholder with AdMob Rewarded Video on app conversion.
+// Reward callback maps directly to onUnlocked() (XP grant + download unlock).
 import { useEffect, useState } from "react";
 import { X, Gift, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AdSlot } from "./AdSlot";
+import { AdPlaceholder } from "./ads/AdPlaceholder";
+import { Confetti } from "./ads/Confetti";
+import { AdSession } from "@/lib/adSession";
+import { useOnline } from "@/hooks/useOnline";
 
 interface Props {
   open: boolean;
@@ -12,6 +17,7 @@ interface Props {
 }
 
 export const WatchToUnlockModal = ({ open, chapterTitle, durationSec = 30, onClose, onUnlocked }: Props) => {
+  const online = useOnline();
   const [remaining, setRemaining] = useState(durationSec);
   const [unlocked, setUnlocked] = useState(false);
 
@@ -19,6 +25,14 @@ export const WatchToUnlockModal = ({ open, chapterTitle, durationSec = 30, onClo
     if (!open) return;
     setRemaining(durationSec);
     setUnlocked(false);
+
+    // Offline: silently skip the ad and grant the reward immediately.
+    if (!online) {
+      setUnlocked(true);
+      return;
+    }
+
+    AdSession.markRewardedDownloadShown();
     const id = setInterval(() => {
       setRemaining((r) => {
         if (r <= 1) {
@@ -30,7 +44,7 @@ export const WatchToUnlockModal = ({ open, chapterTitle, durationSec = 30, onClo
       });
     }, 1000);
     return () => clearInterval(id);
-  }, [open, durationSec]);
+  }, [open, durationSec, online]);
 
   if (!open) return null;
 
@@ -41,7 +55,7 @@ export const WatchToUnlockModal = ({ open, chapterTitle, durationSec = 30, onClo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-background/80 backdrop-blur-md" />
-      <div className="relative w-full max-w-sm surface-elevated p-6 rounded-2xl animate-fade-in">
+      <div className="relative w-full max-w-sm surface-elevated p-6 rounded-2xl animate-fade-in overflow-hidden">
         {!unlocked ? (
           <>
             <div className="flex items-start justify-between mb-4">
@@ -72,20 +86,28 @@ export const WatchToUnlockModal = ({ open, chapterTitle, durationSec = 30, onClo
               </div>
             </div>
 
-            <AdSlot className="mb-3" />
+            <AdPlaceholder
+              label="Rewarded Video Ad"
+              note="AdMob Rewarded Video — unit ready for SDK"
+              className="mb-3"
+            />
             <p className="text-[11px] text-center text-muted-foreground">
-              Do not close this screen · Ad 1 of 1
+              Do not close · Ad 1 of 1
             </p>
 
             <Button disabled className="w-full mt-4 h-11 rounded-xl opacity-40 cursor-not-allowed bg-surface border border-border">
               Download will unlock in {remaining}s
             </Button>
+            <p className="text-[10px] text-center text-muted-foreground mt-2">
+              Watch the full ad to unlock your download
+            </p>
           </>
         ) : (
           <>
-            <div className="text-center -mx-6 -mt-6 px-6 pt-6 pb-4 rounded-t-2xl bg-gradient-reward">
+            <Confetti />
+            <div className="text-center -mx-6 -mt-6 px-6 pt-6 pb-4 rounded-t-2xl" style={{ background: "linear-gradient(135deg, hsl(var(--success) / 0.85), hsl(var(--success)))" }}>
               <div className="text-4xl mb-1">🎉</div>
-              <h3 className="font-bold text-xl text-white">Reward granted!</h3>
+              <h3 className="font-bold text-xl text-white">Reward Granted!</h3>
             </div>
             <div className="text-center mt-4">
               <p className="text-sm text-foreground/90 mb-1">Unlocked:</p>
@@ -94,8 +116,8 @@ export const WatchToUnlockModal = ({ open, chapterTitle, durationSec = 30, onClo
                 <Gift className="h-4 w-4" /> +10 XP earned
               </div>
             </div>
-            <Button onClick={onUnlocked} size="lg" className="w-full mt-6 bg-gradient-button border border-primary/40 text-primary h-12 rounded-xl font-semibold">
-              <Download className="h-4 w-4 mr-2" /> Download now
+            <Button onClick={onUnlocked} size="lg" className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground h-12 rounded-xl font-semibold">
+              <Download className="h-4 w-4 mr-2" /> Download Now
             </Button>
             <Button onClick={onClose} variant="ghost" className="w-full mt-2 text-muted-foreground">
               Maybe later
