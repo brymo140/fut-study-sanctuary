@@ -126,11 +126,11 @@ export const AdminUsers = () => {
               <Td>
                 <div className="flex gap-1">
                   <ActionBtn onClick={() => setViewing(u)}><Eye className="h-3 w-3" /></ActionBtn>
-                  <ActionBtn tone="primary" onClick={() => promote(u)} title="Promote to class rep"><Shield className="h-3 w-3" /></ActionBtn>
+                  <ActionBtn tone="primary" onClick={() => promote(u)}><Shield className="h-3 w-3" /></ActionBtn>
                   <ActionBtn
                     tone={(roles[u.id] || []).includes("admin") ? "danger" : "primary"}
                     onClick={() => toggleAdmin(u)}
-                    title={(roles[u.id] || []).includes("admin") ? "Demote admin" : "Promote to admin"}
+                   
                   ><Crown className="h-3 w-3" /></ActionBtn>
                   <ActionBtn tone="danger" onClick={() => toggleBan(u)}><Ban className="h-3 w-3" /></ActionBtn>
                   <ActionBtn tone="danger" onClick={() => remove(u)}><Trash2 className="h-3 w-3" /></ActionBtn>
