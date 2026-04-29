@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { toast } from "sonner";
 import { ArrowRight } from "lucide-react";
+import { PasswordInput } from "@/components/PasswordInput";
 
 const schema = z.object({
   full_name: z.string().trim().min(2, "Name is too short").max(100),
@@ -107,10 +108,10 @@ const Signup = () => {
             />
           </Field>
           <Field label="Password">
-            <input
-              type="password" required value={form.password}
+            <PasswordInput
+              required value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="input-base" placeholder="At least 6 characters" minLength={6}
+              className="input-base pr-11" placeholder="At least 6 characters" minLength={6}
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
