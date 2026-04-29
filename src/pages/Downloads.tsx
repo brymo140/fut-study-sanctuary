@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { PdfViewer } from "@/components/PdfViewer";
+import { BannerAd } from "@/components/BannerAd";
 
 interface Item {
   id: string;
@@ -40,6 +41,9 @@ const Downloads = () => {
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Downloads</h1>
       <p className="text-sm text-muted-foreground">{items.length} chapter{items.length !== 1 && "s"} unlocked</p>
+
+      {/* ADMOB READY — banner at top below header */}
+      <BannerAd />
 
       {items.length === 0 ? (
         <div className="surface-card p-8 text-center text-sm text-muted-foreground">

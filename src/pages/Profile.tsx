@@ -86,6 +86,8 @@ const Profile = () => {
         <LogOut className="h-4 w-4 mr-2" /> Sign out
       </Button>
 
+      {/* ADMOB READY — banner above bottom nav */}
+      <BannerAd className="pt-2" />
       <div className="h-4" />
     </div>
   );
