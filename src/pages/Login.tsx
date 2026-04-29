@@ -3,17 +3,27 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { AuthBack } from "@/components/AuthBack";
+import { PasswordInput } from "@/components/PasswordInput";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+
+const REMEMBER_KEY = "hv_remember_me";
 
 const Login = () => {
   const navigate = useNavigate();
   const { session, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Default to whatever was last chosen (default true)
+    const stored = localStorage.getItem(REMEMBER_KEY);
+    if (stored !== null) setRemember(stored === "1");
+  }, []);
 
   useEffect(() => {
     if (!authLoading && session) navigate("/", { replace: true });
@@ -22,6 +32,7 @@ const Login = () => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
     if (error) {
@@ -39,6 +50,7 @@ const Login = () => {
   };
 
   const google = async () => {
+    localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
     const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
     if (r.error) toast.error("Could not start Google sign in");
   };
@@ -69,13 +81,22 @@ const Login = () => {
               <label className="text-xs font-medium text-muted-foreground">Password</label>
               <Link to="/forgot-password" className="text-xs text-primary hover:underline">Forgot password?</Link>
             </div>
-            <input
-              type="password" required value={password}
+            <PasswordInput
+              required value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary"
               placeholder="Your password"
             />
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none py-1">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 rounded border-border bg-surface accent-primary cursor-pointer"
+            />
+            <span className="text-xs text-muted-foreground">Remember me on this device</span>
+          </label>
 
           <Button type="submit" disabled={loading} size="lg" className="w-full bg-gradient-button border border-primary/40 text-primary h-12 rounded-xl font-semibold mt-2">
             {loading ? "Signing in…" : "Login"}

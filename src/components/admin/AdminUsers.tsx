@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Eye, Shield, Ban, Trash2 } from "lucide-react";
+import { Eye, Shield, Ban, Trash2, Crown } from "lucide-react";
 import { SectionHeader, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
+import { isHardcodedAdminEmail } from "@/contexts/AuthContext";
 
 interface Profile {
   id: string; full_name: string; email: string; level: string | null; department: string | null;
@@ -41,6 +42,26 @@ export const AdminUsers = () => {
     const { error } = await supabase.from("user_roles").insert({ user_id: u.id, role: "rep" });
     if (error) { toast.error(error.message); return; }
     toast.success("Promoted to class rep");
+    reload();
+  };
+
+  const toggleAdmin = async (u: Profile) => {
+    const isAdmin = (roles[u.id] || []).includes("admin");
+    if (isAdmin) {
+      if (isHardcodedAdminEmail(u.email)) {
+        toast.error("This admin is permanent and cannot be demoted.");
+        return;
+      }
+      if (!confirm(`Demote ${u.full_name || u.email} from admin?`)) return;
+      const { error } = await supabase.from("user_roles").delete().eq("user_id", u.id).eq("role", "admin");
+      if (error) { toast.error(error.message); return; }
+      toast.success("Admin role removed");
+    } else {
+      if (!confirm(`Promote ${u.full_name || u.email} to admin? They will get full /admin access on next login.`)) return;
+      const { error } = await supabase.from("user_roles").insert({ user_id: u.id, role: "admin" });
+      if (error && error.code !== "23505") { toast.error(error.message); return; }
+      toast.success("Promoted to admin");
+    }
     reload();
   };
 
@@ -106,6 +127,11 @@ export const AdminUsers = () => {
                 <div className="flex gap-1">
                   <ActionBtn onClick={() => setViewing(u)}><Eye className="h-3 w-3" /></ActionBtn>
                   <ActionBtn tone="primary" onClick={() => promote(u)}><Shield className="h-3 w-3" /></ActionBtn>
+                  <ActionBtn
+                    tone={(roles[u.id] || []).includes("admin") ? "danger" : "primary"}
+                    onClick={() => toggleAdmin(u)}
+                   
+                  ><Crown className="h-3 w-3" /></ActionBtn>
                   <ActionBtn tone="danger" onClick={() => toggleBan(u)}><Ban className="h-3 w-3" /></ActionBtn>
                   <ActionBtn tone="danger" onClick={() => remove(u)}><Trash2 className="h-3 w-3" /></ActionBtn>
                 </div>

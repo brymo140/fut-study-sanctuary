@@ -5,6 +5,7 @@ import { Logo } from "@/components/Logo";
 import { AuthBack } from "@/components/AuthBack";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { PasswordInput } from "@/components/PasswordInput";
 
 const ResetPassword = () => {
   const navigate = useNavigate();
@@ -27,8 +28,8 @@ const ResetPassword = () => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters");
       return;
     }
     if (password !== confirm) {
@@ -39,11 +40,12 @@ const ResetPassword = () => {
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(error.message || "Could not update password. Try requesting a new reset link.");
       return;
     }
-    toast.success("Password updated. You're signed in.");
-    navigate("/", { replace: true });
+    toast.success("Password updated successfully!");
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -54,7 +56,7 @@ const ResetPassword = () => {
           <Logo size="md" />
         </div>
 
-        <h1 className="text-2xl font-bold mb-1">Set new password</h1>
+        <h1 className="text-2xl font-bold mb-1">Set New Password</h1>
         <p className="text-sm text-muted-foreground mb-8">
           {ready ? "Choose a strong password you'll remember." : "Verifying your reset link…"}
         </p>
@@ -62,19 +64,17 @@ const ResetPassword = () => {
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1.5">New password</label>
-            <input
-              type="password" required value={password} disabled={!ready}
+            <PasswordInput
+              required value={password} disabled={!ready}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary"
-              placeholder="At least 6 characters" minLength={6}
+              placeholder="At least 8 characters" minLength={8}
             />
           </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1.5">Confirm password</label>
-            <input
-              type="password" required value={confirm} disabled={!ready}
+            <PasswordInput
+              required value={confirm} disabled={!ready}
               onChange={(e) => setConfirm(e.target.value)}
-              className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary"
               placeholder="Repeat password"
             />
           </div>
@@ -82,7 +82,7 @@ const ResetPassword = () => {
             type="submit" disabled={loading || !ready} size="lg"
             className="w-full bg-gradient-button border border-primary/40 text-primary h-12 rounded-xl font-semibold mt-2"
           >
-            {loading ? "Saving…" : "Update password"}
+            {loading ? "Saving…" : "Update Password"}
           </Button>
         </form>
       </div>

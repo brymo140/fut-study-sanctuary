@@ -29,7 +29,12 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const ADMIN_EMAIL = "lawalibrahimakorede@gmail.com";
+export const ADMIN_EMAILS = [
+  "lawalibrahimakorede@gmail.com",
+  "lawalibrahim1240brymo@gmail.com",
+];
+export const isHardcodedAdminEmail = (email?: string | null) =>
+  !!email && ADMIN_EMAILS.includes(email.toLowerCase());
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -57,7 +62,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // so it triggers even before/without a profile row), make sure the
     // admin role is present. Idempotent on every login.
     const emailForCheck = (sessionEmail || profileData?.email || "").toLowerCase();
-    if (!admin && emailForCheck === ADMIN_EMAIL) {
+    if (!admin && isHardcodedAdminEmail(emailForCheck)) {
       // Insert if missing — duplicate is fine, unique constraint will no-op.
       const { error: insertErr } = await supabase
         .from("user_roles")
@@ -86,6 +91,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    // Honor "Remember me": if user opted out, clear stored session on a fresh
+    // browser session (new tab/window where sessionStorage tab marker is missing).
+    const remember = localStorage.getItem("hv_remember_me");
+    const tabMarker = sessionStorage.getItem("hv_tab_open");
+    if (remember === "0" && !tabMarker) {
+      supabase.auth.signOut();
+    }
+    sessionStorage.setItem("hv_tab_open", "1");
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
