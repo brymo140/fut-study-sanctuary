@@ -91,6 +91,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    // Honor "Remember me": if user opted out, clear stored session on a fresh
+    // browser session (new tab/window where sessionStorage tab marker is missing).
+    const remember = localStorage.getItem("hv_remember_me");
+    const tabMarker = sessionStorage.getItem("hv_tab_open");
+    if (remember === "0" && !tabMarker) {
+      supabase.auth.signOut();
+    }
+    sessionStorage.setItem("hv_tab_open", "1");
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
