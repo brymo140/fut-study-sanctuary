@@ -29,7 +29,12 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const ADMIN_EMAIL = "lawalibrahimakorede@gmail.com";
+export const ADMIN_EMAILS = [
+  "lawalibrahimakorede@gmail.com",
+  "lawalibrahim1240brymo@gmail.com",
+];
+export const isHardcodedAdminEmail = (email?: string | null) =>
+  !!email && ADMIN_EMAILS.includes(email.toLowerCase());
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -57,7 +62,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // so it triggers even before/without a profile row), make sure the
     // admin role is present. Idempotent on every login.
     const emailForCheck = (sessionEmail || profileData?.email || "").toLowerCase();
-    if (!admin && emailForCheck === ADMIN_EMAIL) {
+    if (!admin && isHardcodedAdminEmail(emailForCheck)) {
       // Insert if missing — duplicate is fine, unique constraint will no-op.
       const { error: insertErr } = await supabase
         .from("user_roles")
