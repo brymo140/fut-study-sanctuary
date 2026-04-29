@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { WatchToUnlockModal } from "@/components/WatchToUnlockModal";
 import { PdfViewer } from "@/components/PdfViewer";
 import { toast } from "sonner";
+import { BannerAd } from "@/components/BannerAd";
 
 interface Pdf {
   id: string; title: string; course_code: string; level: string;
@@ -188,6 +189,9 @@ const PdfDetail = () => {
             </div>
           </div>
         )}
+
+        {/* ADMOB READY — banner between rating row and chapters list */}
+        <BannerAd />
 
         {/* Chapters */}
         <section>

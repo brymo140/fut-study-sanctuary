@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { NativeYouTubeAdCard } from "@/components/ads/NativeYouTubeAdCard";
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 
@@ -90,32 +91,36 @@ const Watch = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {channels.map((c) => (
-            <div key={c.id} className="surface-card p-3 flex gap-3">
-              <div className="h-20 w-20 shrink-0 rounded-lg bg-gradient-cover overflow-hidden flex items-center justify-center">
-                {c.thumbnail_url
-                  ? <img src={c.thumbnail_url} alt="" className="h-full w-full object-cover" />
-                  : <Play className="h-8 w-8 text-white/80" />}
-              </div>
-              <div className="flex-1 min-w-0 flex flex-col">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold line-clamp-1">{c.channel_name}</p>
-                  {c.level && <span className="badge-blue shrink-0">{c.level}</span>}
+          {channels.map((c, idx) => (
+            <Fragment key={c.id}>
+              <div className="surface-card p-3 flex gap-3">
+                <div className="h-20 w-20 shrink-0 rounded-lg bg-gradient-cover overflow-hidden flex items-center justify-center">
+                  {c.thumbnail_url
+                    ? <img src={c.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                    : <Play className="h-8 w-8 text-white/80" />}
                 </div>
-                {c.description && (
-                  <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{c.description}</p>
-                )}
-                {c.course_tags && c.course_tags.length > 0 && (
-                  <p className="text-[10px] text-muted-foreground mt-1">{c.course_tags.join(" · ")}</p>
-                )}
-                <a
-                  href={c.channel_url} target="_blank" rel="noreferrer"
-                  className="mt-auto inline-flex items-center justify-center gap-1.5 bg-youtube hover:bg-youtube/90 text-white text-xs font-bold px-3 py-1.5 rounded-md self-start"
-                >
-                  <Play className="h-3 w-3 fill-white" /> Watch on YouTube
-                </a>
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold line-clamp-1">{c.channel_name}</p>
+                    {c.level && <span className="badge-blue shrink-0">{c.level}</span>}
+                  </div>
+                  {c.description && (
+                    <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{c.description}</p>
+                  )}
+                  {c.course_tags && c.course_tags.length > 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-1">{c.course_tags.join(" · ")}</p>
+                  )}
+                  <a
+                    href={c.channel_url} target="_blank" rel="noreferrer"
+                    className="mt-auto inline-flex items-center justify-center gap-1.5 bg-youtube hover:bg-youtube/90 text-white text-xs font-bold px-3 py-1.5 rounded-md self-start"
+                  >
+                    <Play className="h-3 w-3 fill-white" /> Watch on YouTube
+                  </a>
+                </div>
               </div>
-            </div>
+              {/* ADMOB READY — native sponsored card after every 3 real channels (never first) */}
+              {(idx + 1) % 3 === 0 && idx + 1 < channels.length && <NativeYouTubeAdCard />}
+            </Fragment>
           ))}
         </div>
       )}

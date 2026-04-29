@@ -2,6 +2,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Flame, Award, LogOut, GraduationCap, Building2, BookOpen, Hash, Mail, Shield, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { BannerAd } from "@/components/BannerAd";
 
 const Profile = () => {
   const { profile, isAdmin, roleLabel, signOut } = useAuth();
@@ -85,6 +86,8 @@ const Profile = () => {
         <LogOut className="h-4 w-4 mr-2" /> Sign out
       </Button>
 
+      {/* ADMOB READY — banner above bottom nav */}
+      <BannerAd className="pt-2" />
       <div className="h-4" />
     </div>
   );
