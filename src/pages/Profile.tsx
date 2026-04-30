@@ -1,12 +1,13 @@
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth, isHardcodedAdminEmail } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Flame, Award, LogOut, GraduationCap, Building2, BookOpen, Hash, Mail, Shield, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { BannerAd } from "@/components/BannerAd";
 
 const Profile = () => {
-  const { profile, isAdmin, roleLabel, signOut } = useAuth();
+  const { profile, isAdmin, roleLabel, signOut, session } = useAuth();
   const navigate = useNavigate();
+  const showAdminEntry = isAdmin || isHardcodedAdminEmail(session?.user?.email || profile?.email);
 
   const initials = (profile?.full_name || profile?.email || "U")
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
@@ -36,7 +37,7 @@ const Profile = () => {
       </div>
 
       {/* Admin entry point — always visible to admins */}
-      {isAdmin && (
+      {showAdminEntry && (
         <Button
           onClick={() => navigate("/admin")}
           className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"

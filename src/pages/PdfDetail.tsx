@@ -193,12 +193,19 @@ const PdfDetail = () => {
         {/* ADMOB READY — banner between rating row and chapters list */}
         <BannerAd />
 
-        {/* Chapters */}
+        {/* Description */}
+        {pdf.description && (
+          <div className="surface-card p-3">
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{pdf.description}</p>
+          </div>
+        )}
+
+        {/* Modules */}
         <section>
-          <h2 className="text-sm font-bold mb-3">Chapters — tap to unlock & download</h2>
+          <h2 className="text-sm font-bold mb-3">Modules / Topics — tap to unlock & download</h2>
           {chapters.length === 0 ? (
             <div className="surface-card p-6 text-center text-sm text-muted-foreground">
-              No chapters uploaded yet.
+              No modules uploaded yet.
             </div>
           ) : (
             <div className="space-y-2">
@@ -217,9 +224,11 @@ const PdfDetail = () => {
                       {isDownloaded ? <Check className="h-4 w-4" /> : ch.chapter_number}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium line-clamp-1">{ch.title}</p>
+                      <p className="text-sm font-medium line-clamp-1">
+                        <span className="text-muted-foreground mr-1">M{ch.chapter_number}.</span>{ch.title}
+                      </p>
                       <p className="text-[11px] text-muted-foreground">
-                        {ch.file_size_mb?.toFixed(1) || "—"} MB
+                        {ch.file_size_mb?.toFixed(1) || "—"} MB · {isDownloaded ? "Downloaded" : isNext ? "Available" : "Locked"}
                       </p>
                     </div>
                     {isDownloaded ? (

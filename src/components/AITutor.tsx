@@ -1,11 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, X, Sparkles } from "lucide-react";
+import { Bot, Send, X, Sparkles, RefreshCw, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
 const STREAM_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-tutor`;
+
+const FOLLOWUPS_RE = /\[\[FOLLOWUPS:\s*([^\]]+?)\]\]\s*$/i;
+
+const splitFollowups = (raw: string): { text: string; chips: string[] } => {
+  const m = raw.match(FOLLOWUPS_RE);
+  if (!m) return { text: raw, chips: [] };
+  const text = raw.replace(FOLLOWUPS_RE, "").trimEnd();
+  const chips = m[1].split("||").map((s) => s.trim()).filter(Boolean).slice(0, 2);
+  return { text, chips };
+};
 
 export const AITutor = () => {
   const [open, setOpen] = useState(false);
@@ -18,8 +28,8 @@ export const AITutor = () => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
     if (!text || loading) return;
     const userMsg: Msg = { role: "user", content: text };
     const next = [...messages, userMsg];
@@ -130,16 +140,28 @@ export const AITutor = () => {
                 </div>
                 <div>
                   <h2 className="font-semibold text-foreground">AI study assistant</h2>
-                  <p className="text-xs text-muted-foreground">Ask me anything about your courses</p>
+                  <p className="text-xs text-muted-foreground">Powered by Gemini · ask anything</p>
                 </div>
               </div>
-              <button
-                onClick={() => setOpen(false)}
-                aria-label="Close"
-                className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                {messages.length > 0 && (
+                  <button
+                    onClick={() => setMessages([])}
+                    aria-label="Clear chat"
+                    title="Clear chat"
+                    className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center text-muted-foreground"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setOpen(false)}
+                  aria-label="Close"
+                  className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -170,28 +192,53 @@ export const AITutor = () => {
                 </div>
               )}
 
-              {messages.map((m, i) => (
-                <div
-                  key={i}
-                  className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                      m.role === "user"
-                        ? "bg-primary text-primary-foreground rounded-br-sm"
-                        : "surface-card rounded-bl-sm"
-                    }`}
-                  >
-                    {m.role === "assistant" ? (
-                      <div className="prose prose-sm prose-invert max-w-none [&_p]:my-1 [&_ul]:my-2 [&_ol]:my-2 [&_strong]:text-primary">
-                        <ReactMarkdown>{m.content || "…"}</ReactMarkdown>
+              {messages.map((m, i) => {
+                const isLastAssistant =
+                  m.role === "assistant" && i === messages.length - 1 && !loading;
+                const { text, chips } = m.role === "assistant"
+                  ? splitFollowups(m.content)
+                  : { text: m.content, chips: [] };
+                return (
+                  <div key={i} className="space-y-2">
+                    <div className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div
+                        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                          m.role === "user"
+                            ? "bg-primary text-primary-foreground rounded-br-sm"
+                            : "surface-card rounded-bl-sm"
+                        }`}
+                      >
+                        {m.role === "assistant" ? (
+                          <div className="prose prose-sm prose-invert max-w-none [&_p]:my-1 [&_ul]:my-2 [&_ol]:my-2 [&_strong]:text-primary">
+                            <ReactMarkdown>{text || "…"}</ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap">{text}</p>
+                        )}
                       </div>
-                    ) : (
-                      <p className="whitespace-pre-wrap">{m.content}</p>
+                    </div>
+                    {isLastAssistant && (chips.length > 0 || text) && (
+                      <div className="flex flex-wrap gap-2 pl-1">
+                        {chips.map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => send(c)}
+                            className="text-[11px] px-3 py-1.5 rounded-full bg-primary/10 border border-primary/40 text-primary hover:bg-primary/20 transition-colors"
+                          >
+                            {c}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => send("Please explain that in a completely different way with a new example")}
+                          className="text-[11px] px-3 py-1.5 rounded-full surface-card hover:border-primary text-foreground/80 inline-flex items-center gap-1"
+                        >
+                          <RefreshCw className="h-3 w-3" /> Explain differently
+                        </button>
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {loading && messages[messages.length - 1]?.role === "user" && (
                 <div className="flex justify-start">
@@ -218,7 +265,7 @@ export const AITutor = () => {
               />
               <Button
                 size="icon"
-                onClick={send}
+                onClick={() => send()}
                 disabled={loading || !input.trim()}
                 className="rounded-full bg-gradient-brand hover:opacity-90 h-10 w-10 shrink-0"
               >

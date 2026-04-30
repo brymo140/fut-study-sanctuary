@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth, isHardcodedAdminEmail } from "@/contexts/AuthContext";
 import { BarChart3, FileText, Youtube, Users, Megaphone, Flag, Settings as SettingsIcon } from "lucide-react";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { AdminPdfs } from "@/components/admin/AdminPdfs";
@@ -23,17 +23,20 @@ const TABS: { key: TabKey; label: string; icon: any }[] = [
 ];
 
 const Admin = () => {
-  const { isAdmin, loading, roleLoading, session } = useAuth();
+  const { isAdmin, loading, session } = useAuth();
   const [tab, setTab] = useState<TabKey>("dashboard");
 
-  if (loading || (session && roleLoading)) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
       </div>
     );
   }
-  if (!isAdmin) return <Navigate to="/" replace />;
+  // Only redirect if not signed in. Hardcoded admin emails always pass.
+  if (!session) return <Navigate to="/" replace />;
+  const emailIsAdmin = isHardcodedAdminEmail(session.user.email);
+  if (!isAdmin && !emailIsAdmin) return <Navigate to="/" replace />;
 
   return (
     <div className="space-y-4 pb-6">
