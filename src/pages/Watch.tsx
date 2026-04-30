@@ -1,7 +1,17 @@
 import { useEffect, useState, Fragment } from "react";
-import { Play } from "lucide-react";
+import { Play, Search, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { NativeYouTubeAdCard } from "@/components/ads/NativeYouTubeAdCard";
+
+// Add VITE_YOUTUBE_API_KEY to your .env file — get free key from Google Cloud Console > YouTube Data API v3
+const YT_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
+
+interface YTResult {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+}
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 
@@ -19,6 +29,13 @@ const Watch = () => {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [featured, setFeatured] = useState<Video[]>([]);
 
+  // YouTube search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [results, setResults] = useState<YTResult[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   useEffect(() => {
     const load = async () => {
       let chQ = supabase.from("youtube_channels").select("*").eq("is_active", true).order("created_at", { ascending: false });
@@ -31,6 +48,41 @@ const Watch = () => {
     };
     load();
   }, [level]);
+
+  const runSearch = async (q: string) => {
+    const query = q.trim();
+    if (!query) { setResults(null); setSearchQuery(""); setSearchError(null); return; }
+    if (!YT_API_KEY) {
+      setSearchError("YouTube search not configured. Add VITE_YOUTUBE_API_KEY to .env (Google Cloud Console > YouTube Data API v3).");
+      setResults([]);
+      setSearchQuery(query);
+      return;
+    }
+    setSearching(true);
+    setSearchError(null);
+    setSearchQuery(query);
+    try {
+      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10&relevanceLanguage=en&q=${encodeURIComponent(query)}&key=${YT_API_KEY}`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(String(resp.status));
+      const json = await resp.json();
+      const items: YTResult[] = (json.items || []).map((it: any) => ({
+        videoId: it.id?.videoId,
+        title: it.snippet?.title || "",
+        channelTitle: it.snippet?.channelTitle || "",
+        thumbnail: it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url || "",
+      })).filter((r: YTResult) => r.videoId);
+      setResults(items);
+    } catch (e) {
+      console.error("YT search failed", e);
+      setSearchError("Search failed — check your connection");
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const clearSearch = () => { setSearchInput(""); setSearchQuery(""); setResults(null); setSearchError(null); };
 
   return (
     <div className="space-y-5">
