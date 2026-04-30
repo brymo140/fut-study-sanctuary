@@ -84,6 +84,8 @@ const Watch = () => {
 
   const clearSearch = () => { setSearchInput(""); setSearchQuery(""); setResults(null); setSearchError(null); };
 
+  const showSearchResults = !!searchQuery;
+
   return (
     <div className="space-y-5">
       <div>
@@ -95,6 +97,76 @@ const Watch = () => {
         </div>
         <p className="text-sm text-muted-foreground mt-1">Curated video tutors for your level</p>
       </div>
+
+      {/* YouTube search bar */}
+      <form
+        onSubmit={(e) => { e.preventDefault(); runSearch(searchInput); }}
+        className="surface-card flex items-center gap-2 px-3 py-2"
+      >
+        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+        <input
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Search YouTube videos…"
+          className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground"
+        />
+        {showSearchResults && (
+          <button type="button" onClick={clearSearch} className="text-[11px] text-muted-foreground hover:text-foreground">Clear</button>
+        )}
+        <button type="submit" className="bg-youtube hover:bg-youtube/90 text-white text-xs font-bold px-3 py-1.5 rounded-md">
+          Search
+        </button>
+      </form>
+
+      {/* Search results */}
+      {showSearchResults && (
+        <section className="space-y-3">
+          <p className="text-sm font-bold">Results for "{searchQuery}"</p>
+          {searching ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="surface-card p-3 flex gap-3 animate-pulse">
+                  <div className="h-20 w-32 rounded-lg bg-muted shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-3/4 bg-muted rounded" />
+                    <div className="h-2.5 w-1/2 bg-muted rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : searchError ? (
+            <div className="surface-card p-6 text-center text-sm text-destructive">{searchError}</div>
+          ) : results && results.length === 0 ? (
+            <div className="surface-card p-6 text-center text-sm text-muted-foreground">
+              No results found for "{searchQuery}"
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {results?.map((r) => (
+                <div key={r.videoId} className="surface-card p-3 flex gap-3">
+                  <div className="h-20 w-32 shrink-0 rounded-lg overflow-hidden bg-gradient-cover">
+                    {r.thumbnail && <img src={r.thumbnail} alt="" className="h-full w-full object-cover" />}
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <p className="text-sm font-semibold line-clamp-2">{r.title}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{r.channelTitle}</p>
+                    <a
+                      href={`https://www.youtube.com/watch?v=${r.videoId}`}
+                      target="_blank" rel="noreferrer"
+                      className="mt-auto inline-flex items-center justify-center gap-1.5 bg-youtube hover:bg-youtube/90 text-white text-xs font-bold px-3 py-1.5 rounded-md self-start"
+                    >
+                      <Play className="h-3 w-3 fill-white" /> Watch on YouTube
+                    </a>
+                  </div>
+                </div>
+              ))}
+              <p className="text-[10px] text-muted-foreground text-center pt-1">Powered by YouTube</p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {showSearchResults ? null : (<>
 
       {/* Featured videos */}
       {featured.length > 0 && (
@@ -176,6 +248,7 @@ const Watch = () => {
           ))}
         </div>
       )}
+      </>)}
     </div>
   );
 };
