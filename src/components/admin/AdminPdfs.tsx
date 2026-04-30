@@ -86,7 +86,7 @@ export const AdminPdfs = () => {
         coverUrl = pub.publicUrl;
       }
       const tags = subjectForm.tags.split(",").map((t) => t.trim()).filter(Boolean);
-      const { data: subj, error } = await supabase.from("pdfs").insert({
+      const subjectPayload = {
         title: subjectForm.title,
         course_code: subjectForm.course_code,
         level: subjectForm.level as any,
@@ -98,7 +98,13 @@ export const AdminPdfs = () => {
         is_verified: subjectForm.is_verified,
         total_chapters: 0,
         uploader_id: user.id,
-      }).select().single();
+      };
+      let { data: subj, error } = await supabase.from("pdfs").insert(subjectPayload).select().single();
+      // Transient PostgREST schema-cache error → wait briefly and retry once.
+      if (error && ((error as any).code === "PGRST002" || /schema cache/i.test(error.message))) {
+        await new Promise((r) => setTimeout(r, 1200));
+        ({ data: subj, error } = await supabase.from("pdfs").insert(subjectPayload).select().single());
+      }
       if (error) throw error;
       setActiveSubject(subj as Subject);
       setModules([{ module_number: 1, module_title: "", file: null }]);
