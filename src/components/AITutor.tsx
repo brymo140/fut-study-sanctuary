@@ -265,7 +265,7 @@ export const AITutor = () => {
               />
               <Button
                 size="icon"
-                onClick={send}
+                onClick={() => send()}
                 disabled={loading || !input.trim()}
                 className="rounded-full bg-gradient-brand hover:opacity-90 h-10 w-10 shrink-0"
               >
