@@ -33,16 +33,34 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const cleanEmail = email.trim().toLowerCase();
+    const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
     setLoading(false);
     if (error) {
-      const msg = error.message || "";
-      if (msg.toLowerCase().includes("email not confirmed")) {
+      const msg = (error.message || "").toLowerCase();
+      const code = (error as any).code || "";
+      if (msg.includes("email not confirmed") || code === "email_not_confirmed") {
         toast.error("Email not confirmed yet. Check your inbox.");
-      } else if (msg.toLowerCase().includes("invalid")) {
-        toast.error("Wrong email or password");
+      } else if (msg.includes("invalid") || code === "invalid_credentials") {
+        // Try to differentiate Google-only accounts from a wrong password
+        try {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("email")
+            .ilike("email", cleanEmail)
+            .maybeSingle();
+          if (!prof) {
+            toast.error("No account found for this email. Please sign up first.");
+          } else {
+            toast.error(
+              "Wrong password — or this account uses Google Sign In. Try the Google button below."
+            );
+          }
+        } catch {
+          toast.error("Wrong email or password");
+        }
       } else {
-        toast.error(msg);
+        toast.error(error.message || "Could not sign in");
       }
       return;
     }

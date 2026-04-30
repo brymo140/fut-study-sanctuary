@@ -25,11 +25,18 @@ export const AdminAnnouncements = () => {
   const post = async () => {
     if (!user) return;
     if (!form.title || !form.body) { toast.error("Title and body required"); return; }
-    const { error } = await supabase.from("announcements").insert({
-      title: form.title, body: form.body,
+    const payload = {
+      title: form.title,
+      body: form.body,
       target_level: (form.target_level || null) as any,
       created_by: user.id,
-    });
+    };
+    let { error } = await supabase.from("announcements").insert(payload);
+    // Transient PostgREST schema-cache error → wait briefly and retry once.
+    if (error && ((error as any).code === "PGRST002" || /schema cache/i.test(error.message))) {
+      await new Promise((r) => setTimeout(r, 1200));
+      ({ error } = await supabase.from("announcements").insert(payload));
+    }
     if (error) { toast.error(error.message); return; }
     toast.success("Announcement posted");
     setForm(empty); reload();
