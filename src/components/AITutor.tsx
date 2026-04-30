@@ -28,8 +28,8 @@ export const AITutor = () => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
     if (!text || loading) return;
     const userMsg: Msg = { role: "user", content: text };
     const next = [...messages, userMsg];
