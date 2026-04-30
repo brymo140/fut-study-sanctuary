@@ -104,6 +104,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
+        // Immediate admin flag for hardcoded emails — no DB wait.
+        if (isHardcodedAdminEmail(newSession.user.email)) setIsAdmin(true);
         setTimeout(() => loadProfile(newSession.user.id, newSession.user.email), 0);
       } else {
         setProfile(null);
@@ -116,6 +118,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
+        if (isHardcodedAdminEmail(s.user.email)) setIsAdmin(true);
         loadProfile(s.user.id, s.user.email).finally(() => setLoading(false));
       } else {
         setRoleLoading(false);
