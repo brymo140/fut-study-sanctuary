@@ -1,11 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, X, Sparkles } from "lucide-react";
+import { Bot, Send, X, Sparkles, RefreshCw, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
 const STREAM_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-tutor`;
+
+const FOLLOWUPS_RE = /\[\[FOLLOWUPS:\s*([^\]]+?)\]\]\s*$/i;
+
+const splitFollowups = (raw: string): { text: string; chips: string[] } => {
+  const m = raw.match(FOLLOWUPS_RE);
+  if (!m) return { text: raw, chips: [] };
+  const text = raw.replace(FOLLOWUPS_RE, "").trimEnd();
+  const chips = m[1].split("||").map((s) => s.trim()).filter(Boolean).slice(0, 2);
+  return { text, chips };
+};
 
 export const AITutor = () => {
   const [open, setOpen] = useState(false);
