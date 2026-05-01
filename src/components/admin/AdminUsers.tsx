@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Eye, Shield, Ban, Trash2, Crown } from "lucide-react";
 import { SectionHeader, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
 import { isHardcodedAdminEmail } from "@/contexts/AuthContext";
+import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
 
 interface Profile {
   id: string; full_name: string; email: string; level: string | null; department: string | null;
@@ -39,8 +40,8 @@ export const AdminUsers = () => {
   const promote = async (u: Profile) => {
     const has = (roles[u.id] || []).includes("rep");
     if (has) { toast.info("Already a class rep"); return; }
-    const { error } = await supabase.from("user_roles").insert({ user_id: u.id, role: "rep" });
-    if (error) { toast.error(error.message); return; }
+    const { error } = await withSchemaRetry(async () => await supabase.from("user_roles").insert({ user_id: u.id, role: "rep" }));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     toast.success("Promoted to class rep");
     reload();
   };
@@ -53,28 +54,35 @@ export const AdminUsers = () => {
         return;
       }
       if (!confirm(`Demote ${u.full_name || u.email} from admin?`)) return;
-      const { error } = await supabase.from("user_roles").delete().eq("user_id", u.id).eq("role", "admin");
-      if (error) { toast.error(error.message); return; }
+      const { error } = await withSchemaRetry(async () => await supabase.from("user_roles").delete().eq("user_id", u.id).eq("role", "admin"));
+      if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
       toast.success("Admin role removed");
     } else {
       if (!confirm(`Promote ${u.full_name || u.email} to admin? They will get full /admin access on next login.`)) return;
-      const { error } = await supabase.from("user_roles").insert({ user_id: u.id, role: "admin" });
-      if (error && error.code !== "23505") { toast.error(error.message); return; }
+      const { error } = await withSchemaRetry(async () => await supabase.from("user_roles").insert({ user_id: u.id, role: "admin" }));
+      if (error && error.code !== "23505") { toast.error(getDatabaseErrorMessage(error)); return; }
       toast.success("Promoted to admin");
     }
     reload();
   };
 
   const toggleBan = async (u: Profile) => {
-    await supabase.from("profiles").update({ is_banned: !u.is_banned }).eq("id", u.id);
+    if (isHardcodedAdminEmail(u.email)) {
+      toast.error("Permanent admins cannot be banned.");
+      return;
+    }
+    const { error } = await withSchemaRetry(async () => await supabase.from("profiles").update({ is_banned: !u.is_banned }).eq("id", u.id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     toast.success(u.is_banned ? "User unbanned" : "User banned");
     reload();
   };
 
   const remove = async (u: Profile) => {
     if (!confirm(`Permanently remove ${u.full_name || u.email}? Their auth record stays but their profile is wiped.`)) return;
-    await supabase.from("user_roles").delete().eq("user_id", u.id);
-    await supabase.from("profiles").delete().eq("id", u.id);
+    const rolesDelete = await withSchemaRetry(async () => await supabase.from("user_roles").delete().eq("user_id", u.id));
+    if (rolesDelete.error) { toast.error(getDatabaseErrorMessage(rolesDelete.error)); return; }
+    const profileDelete = await withSchemaRetry(async () => await supabase.from("profiles").delete().eq("id", u.id));
+    if (profileDelete.error) { toast.error(getDatabaseErrorMessage(profileDelete.error)); return; }
     toast.success("Profile removed");
     reload();
   };
