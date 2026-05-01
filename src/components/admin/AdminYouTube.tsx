@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Trash2, Pencil, Plus } from "lucide-react";
 import { SectionHeader, Field, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
+import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
 
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
@@ -33,48 +34,56 @@ export const AdminYouTube = () => {
   const addChannel = async () => {
     if (!chForm.channel_name || !chForm.channel_url) { toast.error("Name and URL required"); return; }
     const tags = chForm.course_tags.split(",").map((t) => t.trim()).filter(Boolean);
-    const { error } = await supabase.from("youtube_channels").insert({
+    const { error } = await withSchemaRetry(async () => await supabase.from("youtube_channels").insert({
       channel_name: chForm.channel_name,
       channel_url: chForm.channel_url,
       description: chForm.description || null,
-      level: chForm.level as any,
+      level: (chForm.level || null) as any,
       course_tags: tags,
       thumbnail_url: chForm.thumbnail_url || null,
       is_active: chForm.is_active,
-    });
-    if (error) { toast.error(error.message); return; }
+    }));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     toast.success("Channel added");
     setChForm(ch0); reload();
   };
 
   const addVideo = async () => {
     if (!vForm.video_title || !vForm.video_url) { toast.error("Title and URL required"); return; }
-    const { error } = await supabase.from("youtube_videos").insert({
+    const { error } = await withSchemaRetry(async () => await supabase.from("youtube_videos").insert({
       video_title: vForm.video_title,
       video_url: vForm.video_url,
       thumbnail_url: vForm.thumbnail_url || null,
       course_tag: vForm.course_tag || null,
-      level: vForm.level as any,
+      level: (vForm.level || null) as any,
       is_featured: vForm.is_featured,
-    });
-    if (error) { toast.error(error.message); return; }
+    }));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     toast.success("Video added");
     setVForm(v0); reload();
   };
 
   const delChannel = async (id: string) => {
     if (!confirm("Delete this channel?")) return;
-    await supabase.from("youtube_channels").delete().eq("id", id); reload();
+    const { error } = await withSchemaRetry(async () => await supabase.from("youtube_channels").delete().eq("id", id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
+    reload();
   };
   const delVideo = async (id: string) => {
     if (!confirm("Delete this video?")) return;
-    await supabase.from("youtube_videos").delete().eq("id", id); reload();
+    const { error } = await withSchemaRetry(async () => await supabase.from("youtube_videos").delete().eq("id", id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
+    reload();
   };
   const toggleChActive = async (c: Channel) => {
-    await supabase.from("youtube_channels").update({ is_active: !c.is_active }).eq("id", c.id); reload();
+    const { error } = await withSchemaRetry(async () => await supabase.from("youtube_channels").update({ is_active: !c.is_active }).eq("id", c.id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
+    reload();
   };
   const toggleVidFeat = async (v: Video) => {
-    await supabase.from("youtube_videos").update({ is_featured: !v.is_featured }).eq("id", v.id); reload();
+    const { error } = await withSchemaRetry(async () => await supabase.from("youtube_videos").update({ is_featured: !v.is_featured }).eq("id", v.id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
+    reload();
   };
 
   const saveEditCh = async () => {
