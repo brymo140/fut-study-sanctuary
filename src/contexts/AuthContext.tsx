@@ -131,11 +131,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
         // Immediate admin flag for hardcoded emails — no DB wait.
-        if (isHardcodedAdminEmail(newSession.user.email)) setIsAdmin(true);
+        if (isHardcodedAdminEmail(newSession.user.email)) {
+          setIsAdmin(true);
+          setIsRep(false);
+          storeRole("admin");
+        } else {
+          const storedRole = getStoredRole();
+          if (storedRole === "admin") setIsAdmin(true);
+          if (storedRole === "rep") setIsRep(true);
+        }
         setTimeout(() => loadProfile(newSession.user.id, newSession.user.email), 0);
       } else {
         setProfile(null);
         setIsAdmin(false);
+        setIsRep(false);
         setRoleLoading(false);
       }
     });
@@ -144,7 +153,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        if (isHardcodedAdminEmail(s.user.email)) setIsAdmin(true);
+        if (isHardcodedAdminEmail(s.user.email)) {
+          setIsAdmin(true);
+          setIsRep(false);
+          storeRole("admin");
+        } else {
+          const storedRole = getStoredRole();
+          if (storedRole === "admin") setIsAdmin(true);
+          if (storedRole === "rep") setIsRep(true);
+        }
         loadProfile(s.user.id, s.user.email).finally(() => setLoading(false));
       } else {
         setRoleLoading(false);
@@ -160,6 +177,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = async () => {
+    localStorage.removeItem(ROLE_KEY);
     await supabase.auth.signOut();
   };
 
