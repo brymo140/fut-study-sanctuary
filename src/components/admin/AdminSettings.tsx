@@ -55,7 +55,7 @@ export const AdminSettings = () => {
 
   const saveProfile = async () => {
     if (!profile) return;
-    const { error } = await withSchemaRetry(() => supabase.from("profiles").update({ full_name: displayName }).eq("id", profile.id));
+    const { error } = await withSchemaRetry(async () => await supabase.from("profiles").update({ full_name: displayName }).eq("id", profile.id));
     if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     await refreshProfile();
     toast.success("Display name updated");
