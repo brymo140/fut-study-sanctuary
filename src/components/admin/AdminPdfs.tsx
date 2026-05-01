@@ -175,21 +175,24 @@ export const AdminPdfs = () => {
   };
 
   const toggleVerified = async (p: Subject) => {
-    await supabase.from("pdfs").update({ is_verified: !p.is_verified }).eq("id", p.id);
+    const { error } = await withSchemaRetry(async () => await supabase.from("pdfs").update({ is_verified: !p.is_verified }).eq("id", p.id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     reload();
   };
 
   const remove = async (p: Subject) => {
     if (!confirm(`Delete "${p.title}"? This also removes all its modules.`)) return;
-    await supabase.from("chapters").delete().eq("pdf_id", p.id);
-    await supabase.from("pdfs").delete().eq("id", p.id);
+    const chapterDelete = await withSchemaRetry(async () => await supabase.from("chapters").delete().eq("pdf_id", p.id));
+    if (chapterDelete.error) { toast.error(getDatabaseErrorMessage(chapterDelete.error)); return; }
+    const pdfDelete = await withSchemaRetry(async () => await supabase.from("pdfs").delete().eq("id", p.id));
+    if (pdfDelete.error) { toast.error(getDatabaseErrorMessage(pdfDelete.error)); return; }
     toast.success("Subject deleted");
     reload();
   };
 
   const saveEdit = async () => {
     if (!editing) return;
-    await supabase.from("pdfs").update({
+    const { error } = await withSchemaRetry(async () => await supabase.from("pdfs").update({
       title: editing.title,
       course_code: editing.course_code,
       level: editing.level as any,
@@ -198,7 +201,8 @@ export const AdminPdfs = () => {
       description: editing.description,
       tags: editing.tags,
       is_verified: editing.is_verified,
-    }).eq("id", editing.id);
+    }).eq("id", editing.id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     setEditing(null);
     toast.success("Updated");
     reload();
