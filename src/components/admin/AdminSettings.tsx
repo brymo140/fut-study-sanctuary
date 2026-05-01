@@ -43,7 +43,7 @@ export const AdminSettings = () => {
         updated_at: now,
       }).eq("id", 1);
       if (legacy.error) return legacy;
-      return (supabase.from("app_settings") as any).upsert([
+      return await (supabase.from("app_settings") as any).upsert([
         { key: "adsense_publisher_id", value: settings.adsense_publisher_id, updated_at: now },
         { key: "app_tagline", value: settings.app_tagline, updated_at: now },
         { key: "maintenance_mode", value: String(settings.maintenance_mode), updated_at: now },
