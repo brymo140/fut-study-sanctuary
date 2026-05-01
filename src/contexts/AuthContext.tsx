@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { withSchemaRetry } from "@/lib/supabaseRetry";
 
 interface Profile {
   id: string;
@@ -72,7 +73,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     if (profileData?.is_banned && isHardcodedAdminEmail(emailForCheck)) {
-      await supabase.from("profiles").update({ is_banned: false }).eq("id", uid);
+      await withSchemaRetry(async () => await supabase.from("profiles").update({ is_banned: false }).eq("id", uid));
       profileData.is_banned = false;
     }
 
@@ -87,9 +88,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (isHardcodedAdminEmail(emailForCheck)) {
       // Insert if missing — duplicate is fine, unique constraint will no-op.
       if (!admin) {
-        const { error: insertErr } = await supabase
+        const { error: insertErr } = await withSchemaRetry(async () => await supabase
           .from("user_roles")
-          .insert({ user_id: uid, role: "admin" });
+          .insert({ user_id: uid, role: "admin" }));
         if (!insertErr || insertErr.code === "23505") admin = true;
       }
       admin = true;
@@ -107,10 +108,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (last !== today) {
         const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
         const newStreak = last === yesterday ? (profileData.streak || 0) + 1 : 1;
-        await supabase
+        await withSchemaRetry(async () => await supabase
           .from("profiles")
           .update({ last_active: today, streak: newStreak })
-          .eq("id", uid);
+          .eq("id", uid));
         setProfile({ ...profileData, last_active: today, streak: newStreak } as Profile);
       }
     }
