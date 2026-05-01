@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { SectionHeader, Field, inputClass } from "./ui";
+import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
 
 interface Settings {
   adsense_publisher_id: string;
@@ -18,11 +19,14 @@ export const AdminSettings = () => {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    supabase.from("app_settings").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
-      if (data) setSettings({
-        adsense_publisher_id: data.adsense_publisher_id || "",
-        app_tagline: data.app_tagline || "",
-        maintenance_mode: data.maintenance_mode,
+    supabase.from("app_settings").select("*").then(({ data }) => {
+      const rows = (data || []) as any[];
+      const legacy = rows.find((row) => row.id === 1) || {};
+      const byKey = Object.fromEntries(rows.filter((row) => row.key).map((row) => [row.key, row.value]));
+      setSettings({
+        adsense_publisher_id: byKey.adsense_publisher_id ?? legacy.adsense_publisher_id ?? "",
+        app_tagline: byKey.app_tagline ?? legacy.app_tagline ?? "",
+        maintenance_mode: String(byKey.maintenance_mode ?? legacy.maintenance_mode ?? "false") === "true",
       });
     });
     setDisplayName(profile?.full_name || "");
@@ -30,20 +34,29 @@ export const AdminSettings = () => {
 
   const saveSettings = async () => {
     setBusy(true);
-    const { error } = await supabase.from("app_settings").update({
-      adsense_publisher_id: settings.adsense_publisher_id,
-      app_tagline: settings.app_tagline,
-      maintenance_mode: settings.maintenance_mode,
-      updated_at: new Date().toISOString(),
-    }).eq("id", 1);
+    const now = new Date().toISOString();
+    const { error } = await withSchemaRetry(async () => {
+      const legacy = await supabase.from("app_settings").update({
+        adsense_publisher_id: settings.adsense_publisher_id,
+        app_tagline: settings.app_tagline,
+        maintenance_mode: settings.maintenance_mode,
+        updated_at: now,
+      }).eq("id", 1);
+      if (legacy.error) return legacy;
+      return (supabase.from("app_settings") as any).upsert([
+        { key: "adsense_publisher_id", value: settings.adsense_publisher_id, updated_at: now },
+        { key: "app_tagline", value: settings.app_tagline, updated_at: now },
+        { key: "maintenance_mode", value: String(settings.maintenance_mode), updated_at: now },
+      ], { onConflict: "key" });
+    });
     setBusy(false);
-    if (error) toast.error(error.message); else toast.success("Settings saved");
+    if (error) toast.error(getDatabaseErrorMessage(error)); else toast.success("Settings saved");
   };
 
   const saveProfile = async () => {
     if (!profile) return;
-    const { error } = await supabase.from("profiles").update({ full_name: displayName }).eq("id", profile.id);
-    if (error) { toast.error(error.message); return; }
+    const { error } = await withSchemaRetry(() => supabase.from("profiles").update({ full_name: displayName }).eq("id", profile.id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     await refreshProfile();
     toast.success("Display name updated");
   };
