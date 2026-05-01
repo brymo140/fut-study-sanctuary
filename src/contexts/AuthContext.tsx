@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface Profile {
   id: string;
@@ -14,6 +15,7 @@ interface Profile {
   xp: number;
   streak: number;
   last_active: string | null;
+  is_banned: boolean;
 }
 
 interface AuthContextType {
@@ -36,14 +38,18 @@ export const ADMIN_EMAILS = [
 export const isHardcodedAdminEmail = (email?: string | null) =>
   !!email && ADMIN_EMAILS.includes(email.toLowerCase());
 
+const ROLE_KEY = "hv_user_role";
+const getStoredRole = () => (typeof window === "undefined" ? null : localStorage.getItem(ROLE_KEY));
+const storeRole = (role: "admin" | "rep" | "student") => localStorage.setItem(ROLE_KEY, role);
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isRep, setIsRep] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(() => getStoredRole() === "admin");
+  const [isRep, setIsRep] = useState(() => getStoredRole() === "rep");
   const [loading, setLoading] = useState(true);
   const [roleLoading, setRoleLoading] = useState(true);
 
@@ -53,6 +59,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
     ]);
+    const emailForCheck = (sessionEmail || profileData?.email || "").toLowerCase();
+    if (profileData?.is_banned && !isHardcodedAdminEmail(emailForCheck)) {
+      setProfile(profileData as Profile);
+      storeRole("student");
+      setIsAdmin(false);
+      setIsRep(false);
+      setRoleLoading(false);
+      toast.error("Your account has been suspended. Contact support.");
+      await supabase.auth.signOut();
+      return;
+    }
+
+    if (profileData?.is_banned && isHardcodedAdminEmail(emailForCheck)) {
+      await supabase.from("profiles").update({ is_banned: false }).eq("id", uid);
+      profileData.is_banned = false;
+    }
+
     setProfile(profileData as Profile | null);
     let admin = !!roles?.some((r) => r.role === "admin");
     const rep = !!roles?.some((r) => r.role === "rep");
@@ -61,17 +84,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // (works for both email/password AND Google OAuth — uses session email
     // so it triggers even before/without a profile row), make sure the
     // admin role is present. Idempotent on every login.
-    const emailForCheck = (sessionEmail || profileData?.email || "").toLowerCase();
-    if (!admin && isHardcodedAdminEmail(emailForCheck)) {
+    if (isHardcodedAdminEmail(emailForCheck)) {
       // Insert if missing — duplicate is fine, unique constraint will no-op.
-      const { error: insertErr } = await supabase
-        .from("user_roles")
-        .insert({ user_id: uid, role: "admin" });
-      if (!insertErr || insertErr.code === "23505") admin = true;
+      if (!admin) {
+        const { error: insertErr } = await supabase
+          .from("user_roles")
+          .insert({ user_id: uid, role: "admin" });
+        if (!insertErr || insertErr.code === "23505") admin = true;
+      }
+      admin = true;
     }
 
     setIsAdmin(admin);
     setIsRep(rep);
+    storeRole(admin ? "admin" : rep ? "rep" : "student");
     setRoleLoading(false);
 
     // Update streak / last_active
