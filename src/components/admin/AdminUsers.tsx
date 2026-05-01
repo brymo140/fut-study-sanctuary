@@ -140,7 +140,11 @@ export const AdminUsers = () => {
                     onClick={() => toggleAdmin(u)}
                    
                   ><Crown className="h-3 w-3" /></ActionBtn>
-                  <ActionBtn tone="danger" onClick={() => toggleBan(u)}><Ban className="h-3 w-3" /></ActionBtn>
+                  {!isHardcodedAdminEmail(u.email) && (
+                    <ActionBtn tone={u.is_banned ? "success" : "danger"} onClick={() => toggleBan(u)}>
+                      <Ban className="h-3 w-3" /> {u.is_banned ? "Unban" : "Ban"}
+                    </ActionBtn>
+                  )}
                   <ActionBtn tone="danger" onClick={() => remove(u)}><Trash2 className="h-3 w-3" /></ActionBtn>
                 </div>
               </Td>
