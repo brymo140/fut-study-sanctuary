@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Trash2, Pencil, Check, X, Upload, Plus, BookOpen, ArrowLeft } from "lucide-react";
 import { SectionHeader, Field, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
+import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
 
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
@@ -99,12 +100,7 @@ export const AdminPdfs = () => {
         total_chapters: 0,
         uploader_id: user.id,
       };
-      let { data: subj, error } = await supabase.from("pdfs").insert(subjectPayload).select().single();
-      // Transient PostgREST schema-cache error → wait briefly and retry once.
-      if (error && ((error as any).code === "PGRST002" || /schema cache/i.test(error.message))) {
-        await new Promise((r) => setTimeout(r, 1200));
-        ({ data: subj, error } = await supabase.from("pdfs").insert(subjectPayload).select().single());
-      }
+      const { data: subj, error } = await withSchemaRetry(async () => await supabase.from("pdfs").insert(subjectPayload).select().single());
       if (error) throw error;
       setActiveSubject(subj as Subject);
       setModules([{ module_number: 1, module_title: "", file: null }]);
@@ -145,23 +141,25 @@ export const AdminPdfs = () => {
         const path = `${activeSubject.id}/m${m.module_number}-${Date.now()}-${f.name}`;
         const { error: upErr } = await supabase.storage.from("chapters").upload(path, f);
         if (upErr) throw upErr;
-        await supabase.from("chapters").insert({
+        const { error: chapterErr } = await withSchemaRetry(async () => await supabase.from("chapters").insert({
           pdf_id: activeSubject.id,
           chapter_number: m.module_number,
           title: m.module_title,
           storage_path: path,
           file_size_mb: Math.round((f.size / (1024 * 1024)) * 10) / 10,
-        });
+        }));
+        if (chapterErr) throw chapterErr;
       }
       // Update aggregate counts on subject
       const { data: existing } = await supabase
         .from("chapters")
         .select("id")
         .eq("pdf_id", activeSubject.id);
-      await supabase.from("pdfs").update({
+      const { error: pdfErr } = await withSchemaRetry(async () => await supabase.from("pdfs").update({
         total_chapters: existing?.length || valid.length,
         file_size_mb: Math.round((totalSize / (1024 * 1024)) * 10) / 10,
-      }).eq("id", activeSubject.id);
+      }).eq("id", activeSubject.id));
+      if (pdfErr) throw pdfErr;
 
       toast.success(`Saved ${valid.length} module${valid.length > 1 ? "s" : ""}`);
       setStep("list");
