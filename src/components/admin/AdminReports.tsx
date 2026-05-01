@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Eye, X, Trash2 } from "lucide-react";
 import { SectionHeader, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
+import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
 
 interface Report {
   id: string; pdf_id: string; user_id: string; reason: string; created_at: string;
@@ -39,14 +40,18 @@ export const AdminReports = () => {
   useEffect(() => { reload(); }, []);
 
   const dismiss = async (id: string) => {
-    await supabase.from("reports").delete().eq("id", id);
+    const { error } = await withSchemaRetry(async () => await supabase.from("reports").delete().eq("id", id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     toast.success("Report dismissed"); reload();
   };
   const deletePdf = async (r: Report) => {
     if (!confirm(`Delete the reported PDF "${r.pdf_title}"?`)) return;
-    await supabase.from("chapters").delete().eq("pdf_id", r.pdf_id);
-    await supabase.from("pdfs").delete().eq("id", r.pdf_id);
-    await supabase.from("reports").delete().eq("pdf_id", r.pdf_id);
+    const chapters = await withSchemaRetry(async () => await supabase.from("chapters").delete().eq("pdf_id", r.pdf_id));
+    if (chapters.error) { toast.error(getDatabaseErrorMessage(chapters.error)); return; }
+    const pdf = await withSchemaRetry(async () => await supabase.from("pdfs").delete().eq("id", r.pdf_id));
+    if (pdf.error) { toast.error(getDatabaseErrorMessage(pdf.error)); return; }
+    const reports = await withSchemaRetry(async () => await supabase.from("reports").delete().eq("pdf_id", r.pdf_id));
+    if (reports.error) { toast.error(getDatabaseErrorMessage(reports.error)); return; }
     toast.success("PDF and related reports removed"); reload();
   };
 
