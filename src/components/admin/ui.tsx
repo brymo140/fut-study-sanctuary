@@ -52,12 +52,13 @@ export const ActionBtn = ({
 }: {
   children: ReactNode;
   onClick?: () => void;
-  tone?: "default" | "danger" | "primary";
+  tone?: "default" | "danger" | "primary" | "success";
 }) => {
   const tones: Record<string, string> = {
     default: "bg-surface border-border hover:border-primary text-foreground/80",
     danger: "bg-destructive/10 border-destructive/40 hover:border-destructive text-destructive",
     primary: "bg-primary/10 border-primary/40 hover:border-primary text-primary",
+    success: "bg-success/10 border-success/40 hover:border-success text-success",
   };
   return (
     <button
