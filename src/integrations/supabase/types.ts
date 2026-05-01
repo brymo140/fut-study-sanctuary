@@ -49,22 +49,28 @@ export type Database = {
           adsense_publisher_id: string | null
           app_tagline: string | null
           id: number
+          key: string | null
           maintenance_mode: boolean
           updated_at: string
+          value: string | null
         }
         Insert: {
           adsense_publisher_id?: string | null
           app_tagline?: string | null
           id?: number
+          key?: string | null
           maintenance_mode?: boolean
           updated_at?: string
+          value?: string | null
         }
         Update: {
           adsense_publisher_id?: string | null
           app_tagline?: string | null
           id?: number
+          key?: string | null
           maintenance_mode?: boolean
           updated_at?: string
+          value?: string | null
         }
         Relationships: []
       }
