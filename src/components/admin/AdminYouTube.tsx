@@ -89,13 +89,15 @@ export const AdminYouTube = () => {
   const saveEditCh = async () => {
     if (!editingCh) return;
     const { id, ...rest } = editingCh;
-    await supabase.from("youtube_channels").update(rest as any).eq("id", id);
+    const { error } = await withSchemaRetry(async () => await supabase.from("youtube_channels").update(rest as any).eq("id", id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     setEditingCh(null); toast.success("Updated"); reload();
   };
   const saveEditVid = async () => {
     if (!editingVid) return;
     const { id, ...rest } = editingVid;
-    await supabase.from("youtube_videos").update(rest as any).eq("id", id);
+    const { error } = await withSchemaRetry(async () => await supabase.from("youtube_videos").update(rest as any).eq("id", id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     setEditingVid(null); toast.success("Updated"); reload();
   };
 
