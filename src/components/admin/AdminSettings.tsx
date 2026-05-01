@@ -57,6 +57,10 @@ export const AdminSettings = () => {
     if (!profile) return;
     const { error } = await withSchemaRetry(async () => await supabase.from("profiles").update({ full_name: displayName }).eq("id", profile.id));
     if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
+    await withSchemaRetry(async () => await (supabase.from("app_settings") as any).upsert(
+      { key: "admin_display_name", value: displayName, updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    ));
     await refreshProfile();
     toast.success("Display name updated");
   };
