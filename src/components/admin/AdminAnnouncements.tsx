@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Trash2, Pencil, Plus } from "lucide-react";
 import { SectionHeader, Field, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
+import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
 
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
@@ -31,31 +32,31 @@ export const AdminAnnouncements = () => {
       target_level: (form.target_level || null) as any,
       created_by: user.id,
     };
-    let { error } = await supabase.from("announcements").insert(payload);
-    // Transient PostgREST schema-cache error → wait briefly and retry once.
-    if (error && ((error as any).code === "PGRST002" || /schema cache/i.test(error.message))) {
-      await new Promise((r) => setTimeout(r, 1200));
-      ({ error } = await supabase.from("announcements").insert(payload));
-    }
-    if (error) { toast.error(error.message); return; }
+    const { error } = await withSchemaRetry(async () => await supabase.from("announcements").insert(payload));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     toast.success("Announcement posted");
     setForm(empty); reload();
   };
 
   const remove = async (id: string) => {
     if (!confirm("Delete announcement?")) return;
-    await supabase.from("announcements").delete().eq("id", id); reload();
+    const { error } = await withSchemaRetry(async () => await supabase.from("announcements").delete().eq("id", id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
+    reload();
   };
   const toggleActive = async (a: Ann) => {
-    await supabase.from("announcements").update({ is_active: !a.is_active }).eq("id", a.id); reload();
+    const { error } = await withSchemaRetry(async () => await supabase.from("announcements").update({ is_active: !a.is_active }).eq("id", a.id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
+    reload();
   };
   const saveEdit = async () => {
     if (!editing) return;
-    await supabase.from("announcements").update({
+    const { error } = await withSchemaRetry(async () => await supabase.from("announcements").update({
       title: editing.title, body: editing.body,
       target_level: (editing.target_level || null) as any,
       is_active: editing.is_active,
-    }).eq("id", editing.id);
+    }).eq("id", editing.id));
+    if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
     setEditing(null); toast.success("Updated"); reload();
   };
 

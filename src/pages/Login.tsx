@@ -7,7 +7,7 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
+import { isHardcodedAdminEmail, useAuth } from "@/contexts/AuthContext";
 
 const REMEMBER_KEY = "hv_remember_me";
 
@@ -64,7 +64,20 @@ const Login = () => {
       }
       return;
     }
-    if (data.session) navigate("/", { replace: true });
+    if (data.session) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_banned")
+        .eq("id", data.session.user.id)
+        .maybeSingle();
+      if (profile?.is_banned && !isHardcodedAdminEmail(data.session.user.email)) {
+        await supabase.auth.signOut();
+        toast.error("Your account has been suspended. Contact support.");
+        setLoading(false);
+        return;
+      }
+      navigate("/", { replace: true });
+    }
   };
 
   const google = async () => {
