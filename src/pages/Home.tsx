@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
 import { AnnouncementsSheet } from "@/components/AnnouncementsSheet";
 import { NotificationsSheet } from "@/components/NotificationsSheet";
-import { BannerAd } from "@/components/BannerAd";
+
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 
@@ -201,7 +201,7 @@ const Home = () => {
         )}
       </Section>
 
-      <BannerAd />
+      
 
       {/* Recently added */}
       <Section title="Recently added" subtitle="Fresh uploads from class reps">

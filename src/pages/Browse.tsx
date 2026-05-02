@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Search, SlidersHorizontal, LayoutGrid, List as ListIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
-import { BannerAd } from "@/components/BannerAd";
+
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 type Tab = "materials" | "past";
@@ -92,12 +92,8 @@ const Browse = () => {
         </div>
       ) : view === "list" ? (
         <div className="space-y-2.5">
-          {filtered.map((p, i) => (
-            <div key={p.id} className="space-y-2.5">
-              <PdfCard pdf={p} />
-              {/* ADMOB READY — banner every 8 cards */}
-              {(i + 1) % 8 === 0 && i !== filtered.length - 1 && <BannerAd className="py-2" />}
-            </div>
+          {filtered.map((p) => (
+            <PdfCard key={p.id} pdf={p} />
           ))}
         </div>
       ) : (
