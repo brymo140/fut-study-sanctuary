@@ -1,13 +1,12 @@
-// ADMOB READY — central ad session manager. On native conversion, this same
-// service decides when to call AdMob SDK methods. Web build uses placeholders
-// + AdSense Auto Ads. All decisions about cooldowns, online state, and
-// auth-screen suppression flow through here.
+// Ad session manager — decides WHEN to show interstitials and tracks
+// rewarded-download cooldowns. Actual ad presentation is delegated to
+// src/lib/admob.ts (AdMob SDK on native; no-op on web).
 
 type Listener = () => void;
 
-const REWARDED_DOWNLOAD_COOLDOWN_MS = 5 * 60 * 1000; // 5 min
-const MIN_INTERSTITIAL_INTERVAL_MS = 30 * 60 * 1000; // 30 min
-const MAX_INTERSTITIAL_INTERVAL_MS = 40 * 60 * 1000; // 40 min
+const REWARDED_DOWNLOAD_COOLDOWN_MS = 5 * 60 * 1000;
+const MIN_INTERSTITIAL_INTERVAL_MS = 30 * 60 * 1000;
+const MAX_INTERSTITIAL_INTERVAL_MS = 40 * 60 * 1000;
 
 const AUTH_PATH_PREFIXES = ["/welcome", "/signup", "/login", "/forgot-password", "/reset-password"];
 
@@ -21,9 +20,7 @@ class AdSessionManagerImpl {
   private listeners = new Set<Listener>();
 
   constructor() {
-    // Reset on every app open (timer NOT persisted by design).
     this.nextInterstitialDue = Date.now() + this.randomInterval();
-
     if (typeof window !== "undefined") {
       window.addEventListener("online", () => { this.isOnline = true; this.emit(); });
       window.addEventListener("offline", () => { this.isOnline = false; this.emit(); });
@@ -37,40 +34,26 @@ class AdSessionManagerImpl {
     );
   }
 
-  subscribe(fn: Listener) {
-    this.listeners.add(fn);
-    return () => this.listeners.delete(fn);
-  }
+  subscribe(fn: Listener) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   private emit() { this.listeners.forEach((l) => l()); }
 
   setAdsEnabledForPath(pathname: string) {
     const isAuth = AUTH_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
     const next = !isAuth;
-    if (next !== this.adsEnabled) {
-      this.adsEnabled = next;
-      this.emit();
-    }
+    if (next !== this.adsEnabled) { this.adsEnabled = next; this.emit(); }
   }
 
-  /** Should we attempt ANY ad right now? */
-  canShowAd(): boolean {
-    return this.adsEnabled && this.isOnline;
+  isAuthPath(pathname: string) {
+    return AUTH_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
   }
 
-  /** Rewarded download (chapter unlock). */
-  canShowRewardedDownload(): boolean {
-    return this.canShowAd();
-  }
-  markRewardedDownloadShown() {
-    this.lastRewardedDownloadShown = Date.now();
-    this.emit();
-  }
+  canShowAd(): boolean { return this.adsEnabled && this.isOnline; }
 
-  /** Time-based interstitial gate. */
+  markRewardedDownloadShown() { this.lastRewardedDownloadShown = Date.now(); this.emit(); }
+
   isInterstitialDue(): boolean {
     if (!this.canShowAd()) return false;
     if (Date.now() < this.nextInterstitialDue) return false;
-    // Don't show interstitial within 5 minutes of a rewarded download ad.
     if (Date.now() - this.lastRewardedDownloadShown < REWARDED_DOWNLOAD_COOLDOWN_MS) return false;
     return true;
   }
@@ -81,7 +64,6 @@ class AdSessionManagerImpl {
     this.emit();
   }
 
-  /** 50/50 between interstitial and rewarded interstitial. */
   pickInterstitialKind(): "interstitial" | "rewarded-interstitial" {
     return Math.random() < 0.5 ? "interstitial" : "rewarded-interstitial";
   }

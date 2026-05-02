@@ -1,111 +1,69 @@
-// ADMOB READY — swap placeholder with AdMob Rewarded Video on app conversion.
-// Reward callback maps directly to onUnlocked() (XP grant + download unlock).
-import { useEffect, useState } from "react";
-import { X, Gift, Download } from "lucide-react";
+// Rewarded-ad gate for module unlocks. Triggers the AdMob rewarded video
+// (or no-ops on web) and only calls onUnlocked() if the reward is granted.
+import { useEffect, useRef, useState } from "react";
+import { Gift, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AdPlaceholder } from "./ads/AdPlaceholder";
 import { Confetti } from "./ads/Confetti";
 import { AdSession } from "@/lib/adSession";
-import { useOnline } from "@/hooks/useOnline";
+import { showRewardedAd, isOnline } from "@/lib/admob";
+import { toast } from "sonner";
 
 interface Props {
   open: boolean;
   chapterTitle: string;
-  durationSec?: number;
   onClose: () => void;
   onUnlocked: () => void;
 }
 
-export const WatchToUnlockModal = ({ open, chapterTitle, durationSec = 30, onClose, onUnlocked }: Props) => {
-  const online = useOnline();
-  const [remaining, setRemaining] = useState(durationSec);
-  const [unlocked, setUnlocked] = useState(false);
+export const WatchToUnlockModal = ({ open, chapterTitle, onClose, onUnlocked }: Props) => {
+  const [phase, setPhase] = useState<"loading" | "unlocked">("loading");
+  const started = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
-    setRemaining(durationSec);
-    setUnlocked(false);
+    if (!open) { started.current = false; setPhase("loading"); return; }
+    if (started.current) return;
+    started.current = true;
 
-    // Offline: silently skip the ad and grant the reward immediately.
-    if (!online) {
-      setUnlocked(true);
+    if (!isOnline()) {
+      toast.error("You need internet to unlock this module");
+      onClose();
       return;
     }
 
     AdSession.markRewardedDownloadShown();
-    const id = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          clearInterval(id);
-          setUnlocked(true);
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [open, durationSec, online]);
+    (async () => {
+      const granted = await showRewardedAd();
+      if (granted) {
+        setPhase("unlocked");
+      } else {
+        toast.error("Watch the full ad to unlock");
+        onClose();
+      }
+    })();
+  }, [open, onClose]);
 
   if (!open) return null;
-
-  const pct = ((durationSec - remaining) / durationSec) * 100;
-  const circumference = 2 * Math.PI * 54;
-  const offset = circumference - (pct / 100) * circumference;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-background/80 backdrop-blur-md" />
       <div className="relative w-full max-w-sm surface-elevated p-6 rounded-2xl animate-fade-in overflow-hidden">
-        {!unlocked ? (
-          <>
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="text-3xl mb-1">🎬</div>
-                <h3 className="font-bold text-lg">Watch to unlock</h3>
-                <p className="text-xs text-muted-foreground line-clamp-1">{chapterTitle}</p>
-              </div>
-              <button
-                onClick={onClose} aria-label="Close"
-                className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center"
-              ><X className="h-4 w-4" /></button>
-            </div>
-
-            <div className="flex justify-center my-6">
-              <div className="relative h-32 w-32">
-                <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                  <circle cx="60" cy="60" r="54" stroke="hsl(var(--border))" strokeWidth="8" fill="none" />
-                  <circle
-                    cx="60" cy="60" r="54" stroke="hsl(var(--primary))" strokeWidth="8" fill="none"
-                    strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
-                    style={{ transition: "stroke-dashoffset 1s linear" }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-3xl font-bold text-primary">{remaining}</span>
-                </div>
-              </div>
-            </div>
-
-            <AdPlaceholder
-              label="Rewarded Video Ad"
-              note="AdMob Rewarded Video — unit ready for SDK"
-              className="mb-3"
-            />
-            <p className="text-[11px] text-center text-muted-foreground">
-              Do not close · Ad 1 of 1
+        {phase === "loading" ? (
+          <div className="flex flex-col items-center py-6">
+            <div className="h-12 w-12 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4" />
+            <p className="text-sm font-semibold">Loading rewarded ad…</p>
+            <p className="text-[11px] text-muted-foreground mt-1 text-center">
+              Watch the full ad to unlock<br />
+              <span className="text-foreground/80">{chapterTitle}</span>
             </p>
-
-            <Button disabled className="w-full mt-4 h-11 rounded-xl opacity-40 cursor-not-allowed bg-surface border border-border">
-              Download will unlock in {remaining}s
-            </Button>
-            <p className="text-[10px] text-center text-muted-foreground mt-2">
-              Watch the full ad to unlock your download
-            </p>
-          </>
+          </div>
         ) : (
           <>
             <Confetti />
-            <div className="text-center -mx-6 -mt-6 px-6 pt-6 pb-4 rounded-t-2xl" style={{ background: "linear-gradient(135deg, hsl(var(--success) / 0.85), hsl(var(--success)))" }}>
+            <div
+              className="text-center -mx-6 -mt-6 px-6 pt-6 pb-4 rounded-t-2xl"
+              style={{ background: "linear-gradient(135deg, hsl(var(--success) / 0.85), hsl(var(--success)))" }}
+            >
               <div className="text-4xl mb-1">🎉</div>
               <h3 className="font-bold text-xl text-white">Reward Granted!</h3>
             </div>
@@ -116,11 +74,12 @@ export const WatchToUnlockModal = ({ open, chapterTitle, durationSec = 30, onClo
                 <Gift className="h-4 w-4" /> +10 XP earned
               </div>
             </div>
-            <Button onClick={onUnlocked} size="lg" className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground h-12 rounded-xl font-semibold">
-              <Download className="h-4 w-4 mr-2" /> Download Now
-            </Button>
-            <Button onClick={onClose} variant="ghost" className="w-full mt-2 text-muted-foreground">
-              Maybe later
+            <Button
+              onClick={onUnlocked}
+              size="lg"
+              className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground h-12 rounded-xl font-semibold"
+            >
+              <Eye className="h-4 w-4 mr-2" /> Read inside HighVault
             </Button>
           </>
         )}
