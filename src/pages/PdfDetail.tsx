@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, Star, Lock, Play, Check, Download, ShieldCheck, Bookmark, Flag, Eye } from "lucide-react";
+import { ArrowLeft, FileText, Star, Lock, Play, Check, ShieldCheck, Bookmark, Flag, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { WatchToUnlockModal } from "@/components/WatchToUnlockModal";
 import { PdfViewer } from "@/components/PdfViewer";
 import { toast } from "sonner";
-import { BannerAd } from "@/components/BannerAd";
+import { isModuleUnlocked, markModuleUnlocked } from "@/lib/sessionUnlocks";
 
 interface Pdf {
   id: string; title: string; course_code: string; level: string;
@@ -25,25 +25,24 @@ const PdfDetail = () => {
 
   const [pdf, setPdf] = useState<Pdf | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
   const [bookmarked, setBookmarked] = useState(false);
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [unlockChapter, setUnlockChapter] = useState<Chapter | null>(null);
   const [viewChapter, setViewChapter] = useState<Chapter | null>(null);
   const [loading, setLoading] = useState(true);
+  // Tick to re-render when the in-memory unlock set changes.
+  const [, setTick] = useState(0);
 
   const load = async () => {
     if (!id || !user) return;
-    const [{ data: p }, { data: ch }, { data: dl }, { data: bm }, { data: rt }] = await Promise.all([
+    const [{ data: p }, { data: ch }, { data: bm }, { data: rt }] = await Promise.all([
       supabase.from("pdfs").select("*").eq("id", id).maybeSingle(),
       supabase.from("chapters").select("*").eq("pdf_id", id).order("chapter_number"),
-      supabase.from("downloads").select("chapter_id").eq("user_id", user.id).eq("pdf_id", id),
       supabase.from("bookmarks").select("id").eq("user_id", user.id).eq("pdf_id", id).maybeSingle(),
       supabase.from("ratings").select("*").eq("pdf_id", id).order("created_at", { ascending: false }).limit(3),
     ]);
     setPdf(p as Pdf | null);
     setChapters((ch as Chapter[]) || []);
-    setDownloadedIds(new Set((dl || []).map((d) => d.chapter_id)));
     setBookmarked(!!bm);
     setRatings((rt as Rating[]) || []);
     setLoading(false);
@@ -64,30 +63,22 @@ const PdfDetail = () => {
     }
   };
 
+  // Reward callback: mark this module unlocked for the session, log the
+  // open as a "download" record (for analytics + XP), then open the
+  // in-app reader. NEVER trigger a file download to the device.
   const handleUnlocked = async () => {
     const ch = unlockChapter;
     if (!ch || !user || !id) return;
     setUnlockChapter(null);
+    markModuleUnlocked(ch.id);
+    setTick((t) => t + 1);
 
-    // Generate signed URL and trigger download
-    const { data: signed } = await supabase.storage.from("chapters").createSignedUrl(ch.storage_path, 60);
-    if (signed?.signedUrl) {
-      const a = document.createElement("a");
-      a.href = signed.signedUrl;
-      a.download = `${pdf?.course_code || "chapter"}-${ch.chapter_number}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } else {
-      toast("File preview — sample download triggered");
-    }
-
-    // Record download + XP
     await supabase.from("downloads").insert({ user_id: user.id, chapter_id: ch.id, pdf_id: id });
     const { data: prof } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
     await supabase.from("profiles").update({ xp: (prof?.xp || 0) + 10 }).eq("id", user.id);
     refreshProfile();
-    setDownloadedIds(new Set([...downloadedIds, ch.id]));
+
+    setViewChapter(ch);
   };
 
   const reportFile = async () => {
@@ -113,8 +104,7 @@ const PdfDetail = () => {
     );
   }
 
-  const downloadedCount = downloadedIds.size;
-  const remainingLocked = chapters.length - downloadedCount;
+  const unlockedCount = chapters.filter((c) => isModuleUnlocked(c.id)).length;
 
   return (
     <div className="space-y-5 -mx-4 -mt-4">
@@ -133,9 +123,9 @@ const PdfDetail = () => {
           <p className="text-sm text-white/80 mt-1">{pdf.course_code} · {pdf.faculty || pdf.department || "General"}</p>
 
           <div className="flex gap-4 mt-4 text-center text-white/90">
-            <Stat label="Chapters" value={pdf.total_chapters} />
+            <Stat label="Modules" value={pdf.total_chapters} />
             <Stat label="Size" value={`${pdf.file_size_mb?.toFixed(1) || "—"} MB`} />
-            <Stat label="Downloads" value={pdf.download_count} />
+            <Stat label="Reads" value={pdf.download_count} />
           </div>
 
           <div className="flex gap-1.5 flex-wrap justify-center mt-4">
@@ -147,7 +137,6 @@ const PdfDetail = () => {
       </div>
 
       <div className="px-4 space-y-5">
-        {/* Rating + verified */}
         <div className="surface-card p-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex">
@@ -163,7 +152,6 @@ const PdfDetail = () => {
           )}
         </div>
 
-        {/* Action buttons */}
         <div className="flex gap-2">
           <Button onClick={toggleBookmark} variant="outline" className="flex-1 bg-surface border-border">
             <Bookmark className={`h-4 w-4 mr-2 ${bookmarked ? "fill-primary text-primary" : ""}`} />
@@ -174,26 +162,21 @@ const PdfDetail = () => {
           </Button>
         </div>
 
-        {/* Progress */}
         {chapters.length > 0 && (
           <div className="surface-card p-3">
             <div className="flex justify-between text-xs mb-1.5">
-              <span className="text-muted-foreground">Reading progress</span>
-              <span className="font-semibold text-primary">{downloadedCount} of {chapters.length} chapters</span>
+              <span className="text-muted-foreground">Session unlocks</span>
+              <span className="font-semibold text-primary">{unlockedCount} of {chapters.length} unlocked</span>
             </div>
             <div className="h-1.5 rounded-full bg-border overflow-hidden">
               <div
                 className="h-full bg-gradient-brand rounded-full transition-all"
-                style={{ width: `${chapters.length ? (downloadedCount / chapters.length) * 100 : 0}%` }}
+                style={{ width: `${chapters.length ? (unlockedCount / chapters.length) * 100 : 0}%` }}
               />
             </div>
           </div>
         )}
 
-        {/* ADMOB READY — banner between rating row and chapters list */}
-        <BannerAd />
-
-        {/* Description */}
         {pdf.description && (
           <div className="surface-card p-3">
             <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{pdf.description}</p>
@@ -202,77 +185,63 @@ const PdfDetail = () => {
 
         {/* Modules */}
         <section>
-          <h2 className="text-sm font-bold mb-3">Modules / Topics — tap to unlock & download</h2>
+          <h2 className="text-sm font-bold mb-1">Modules / Topics — watch an ad to read each one</h2>
+          <p className="text-[11px] text-muted-foreground mb-3">📖 Read inside HighVault — modules cannot be saved to your device.</p>
           {chapters.length === 0 ? (
             <div className="surface-card p-6 text-center text-sm text-muted-foreground">
               No modules uploaded yet.
             </div>
           ) : (
             <div className="space-y-2">
-              {chapters.map((ch, idx) => {
-                const isDownloaded = downloadedIds.has(ch.id);
-                const isNext = !isDownloaded && chapters.slice(0, idx).every((c) => downloadedIds.has(c.id));
+              {chapters.map((ch) => {
+                const unlocked = isModuleUnlocked(ch.id);
                 return (
                   <div
                     key={ch.id}
-                    className={`surface-card p-3 flex items-center gap-3 ${isNext ? "border-primary" : ""}`}
+                    className={`surface-card p-3 ${unlocked ? "border-primary/40" : ""}`}
                   >
-                    <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                      isDownloaded ? "bg-success/20 text-success" :
-                      isNext ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-                    }`}>
-                      {isDownloaded ? <Check className="h-4 w-4" /> : ch.chapter_number}
+                    <div className="flex items-center gap-3">
+                      <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                        unlocked ? "bg-success/20 text-success" : "bg-muted text-muted-foreground"
+                      }`}>
+                        {unlocked ? <Check className="h-4 w-4" /> : ch.chapter_number}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium line-clamp-1">
+                          <span className="text-muted-foreground mr-1">M{ch.chapter_number}.</span>{ch.title}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {ch.file_size_mb?.toFixed(1) || "—"} MB · {unlocked ? "Unlocked this session" : "Locked"}
+                        </p>
+                      </div>
+                      {unlocked ? (
+                        <Button
+                          size="sm"
+                          onClick={() => setViewChapter(ch)}
+                          variant="outline"
+                          className="bg-surface border-success/40 text-success text-xs h-8"
+                        >
+                          <BookOpen className="h-3 w-3 mr-1" /> Read
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => setUnlockChapter(ch)}
+                          className="bg-gradient-button border border-primary/40 text-primary text-xs h-8"
+                        >
+                          <Play className="h-3 w-3 mr-1 fill-primary" /> Watch
+                        </Button>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium line-clamp-1">
-                        <span className="text-muted-foreground mr-1">M{ch.chapter_number}.</span>{ch.title}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {ch.file_size_mb?.toFixed(1) || "—"} MB · {isDownloaded ? "Downloaded" : isNext ? "Available" : "Locked"}
-                      </p>
-                    </div>
-                    {isDownloaded ? (
-                      <Button
-                        size="sm"
-                        onClick={() => setViewChapter(ch)}
-                        variant="outline"
-                        className="bg-surface border-success/40 text-success text-xs h-8"
-                      >
-                        <Eye className="h-3 w-3 mr-1" /> Read
-                      </Button>
-                    ) : isNext ? (
-                      <Button
-                        size="sm"
-                        onClick={() => setUnlockChapter(ch)}
-                        className="bg-gradient-button border border-primary/40 text-primary text-xs h-8"
-                      >
-                        <Play className="h-3 w-3 mr-1 fill-primary" /> Watch
-                      </Button>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2.5 py-1.5 rounded-md">
-                        <Lock className="h-3 w-3" /> Lock
-                      </span>
-                    )}
+                    <p className="text-[10px] text-muted-foreground mt-2 inline-flex items-center gap-1">
+                      <Lock className="h-2.5 w-2.5" /> 📖 Read inside HighVault — no device download.
+                    </p>
                   </div>
                 );
               })}
             </div>
           )}
         </section>
-
-        {remainingLocked > 0 && chapters.length > 0 && (
-          <Button
-            onClick={() => {
-              const next = chapters.find((c) => !downloadedIds.has(c.id));
-              if (next) setUnlockChapter(next);
-            }}
-            size="lg"
-            className="w-full bg-gradient-button border border-primary/40 text-primary h-12 rounded-xl font-semibold"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Download all chapters (Watch {remainingLocked} ad{remainingLocked > 1 ? "s" : ""})
-          </Button>
-        )}
 
         {/* Reviews */}
         <section>
@@ -314,8 +283,7 @@ const PdfDetail = () => {
         open={!!viewChapter}
         onOpenChange={(v) => !v && setViewChapter(null)}
         storagePath={viewChapter?.storage_path ?? null}
-        title={viewChapter ? `Ch ${viewChapter.chapter_number} · ${viewChapter.title}` : undefined}
-        fileName={viewChapter ? `${pdf?.course_code || "chapter"}-${viewChapter.chapter_number}.pdf` : undefined}
+        title={viewChapter ? `M${viewChapter.chapter_number} · ${viewChapter.title}` : undefined}
       />
     </div>
   );

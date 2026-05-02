@@ -1,10 +1,29 @@
-import { useEffect, useState, Fragment } from "react";
+import { useEffect, useState } from "react";
 import { Play, Search, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { NativeYouTubeAdCard } from "@/components/ads/NativeYouTubeAdCard";
+import { useAuth } from "@/contexts/AuthContext";
+import { showRewardedAd, isOnline } from "@/lib/admob";
+import { toast } from "sonner";
 
 // Add VITE_YOUTUBE_API_KEY to your .env file — get free key from Google Cloud Console > YouTube Data API v3
 const YT_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
+
+// Watch a rewarded ad before opening any YouTube link. Grants +5 XP on success.
+const useRewardedYouTubeOpener = () => {
+  const { user, refreshProfile } = useAuth();
+  return async (url: string) => {
+    if (!isOnline()) { toast.error("You need internet to access this channel"); return; }
+    const granted = await showRewardedAd();
+    if (!granted) { toast.error("Watch the full ad to access this channel"); return; }
+    if (user) {
+      const { data: prof } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
+      await supabase.from("profiles").update({ xp: (prof?.xp || 0) + 5 }).eq("id", user.id);
+      refreshProfile();
+      toast.success("+5 XP · Opening YouTube");
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+};
 
 interface YTResult {
   videoId: string;
@@ -25,6 +44,7 @@ interface Video {
 }
 
 const Watch = () => {
+  const openYouTube = useRewardedYouTubeOpener();
   const [level, setLevel] = useState("All");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [featured, setFeatured] = useState<Video[]>([]);
@@ -150,13 +170,12 @@ const Watch = () => {
                   <div className="flex-1 min-w-0 flex flex-col">
                     <p className="text-sm font-semibold line-clamp-2">{r.title}</p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">{r.channelTitle}</p>
-                    <a
-                      href={`https://www.youtube.com/watch?v=${r.videoId}`}
-                      target="_blank" rel="noreferrer"
+                    <button
+                      onClick={() => openYouTube(`https://www.youtube.com/watch?v=${r.videoId}`)}
                       className="mt-auto inline-flex items-center justify-center gap-1.5 bg-youtube hover:bg-youtube/90 text-white text-xs font-bold px-3 py-1.5 rounded-md self-start"
                     >
                       <Play className="h-3 w-3 fill-white" /> Watch on YouTube
-                    </a>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -174,9 +193,10 @@ const Watch = () => {
           <h2 className="text-sm font-bold mb-3">Featured videos</h2>
           <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
             {featured.map((v) => (
-              <a
-                key={v.id} href={v.video_url} target="_blank" rel="noreferrer"
-                className="shrink-0 w-56 surface-card p-2 hover:border-primary transition-colors"
+              <button
+                key={v.id}
+                onClick={() => openYouTube(v.video_url)}
+                className="text-left shrink-0 w-56 surface-card p-2 hover:border-primary transition-colors"
               >
                 <div className="aspect-video rounded-lg bg-gradient-cover mb-2 flex items-center justify-center overflow-hidden relative">
                   {v.thumbnail_url
@@ -193,7 +213,7 @@ const Watch = () => {
                   {v.course_tag && <span className="text-[10px] text-muted-foreground">{v.course_tag}</span>}
                   {v.level && <span className="badge-blue">{v.level}</span>}
                 </div>
-              </a>
+              </button>
             ))}
           </div>
         </section>
@@ -215,36 +235,32 @@ const Watch = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {channels.map((c, idx) => (
-            <Fragment key={c.id}>
-              <div className="surface-card p-3 flex gap-3">
-                <div className="h-20 w-20 shrink-0 rounded-lg bg-gradient-cover overflow-hidden flex items-center justify-center">
-                  {c.thumbnail_url
-                    ? <img src={c.thumbnail_url} alt="" className="h-full w-full object-cover" />
-                    : <Play className="h-8 w-8 text-white/80" />}
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold line-clamp-1">{c.channel_name}</p>
-                    {c.level && <span className="badge-blue shrink-0">{c.level}</span>}
-                  </div>
-                  {c.description && (
-                    <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{c.description}</p>
-                  )}
-                  {c.course_tags && c.course_tags.length > 0 && (
-                    <p className="text-[10px] text-muted-foreground mt-1">{c.course_tags.join(" · ")}</p>
-                  )}
-                  <a
-                    href={c.channel_url} target="_blank" rel="noreferrer"
-                    className="mt-auto inline-flex items-center justify-center gap-1.5 bg-youtube hover:bg-youtube/90 text-white text-xs font-bold px-3 py-1.5 rounded-md self-start"
-                  >
-                    <Play className="h-3 w-3 fill-white" /> Watch on YouTube
-                  </a>
-                </div>
+          {channels.map((c) => (
+            <div key={c.id} className="surface-card p-3 flex gap-3">
+              <div className="h-20 w-20 shrink-0 rounded-lg bg-gradient-cover overflow-hidden flex items-center justify-center">
+                {c.thumbnail_url
+                  ? <img src={c.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                  : <Play className="h-8 w-8 text-white/80" />}
               </div>
-              {/* ADMOB READY — native sponsored card after every 3 real channels (never first) */}
-              {(idx + 1) % 3 === 0 && idx + 1 < channels.length && <NativeYouTubeAdCard />}
-            </Fragment>
+              <div className="flex-1 min-w-0 flex flex-col">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold line-clamp-1">{c.channel_name}</p>
+                  {c.level && <span className="badge-blue shrink-0">{c.level}</span>}
+                </div>
+                {c.description && (
+                  <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{c.description}</p>
+                )}
+                {c.course_tags && c.course_tags.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-1">{c.course_tags.join(" · ")}</p>
+                )}
+                <button
+                  onClick={() => openYouTube(c.channel_url)}
+                  className="mt-auto inline-flex items-center justify-center gap-1.5 bg-youtube hover:bg-youtube/90 text-white text-xs font-bold px-3 py-1.5 rounded-md self-start"
+                >
+                  <Play className="h-3 w-3 fill-white" /> Watch on YouTube
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       )}
