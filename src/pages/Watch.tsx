@@ -1,10 +1,29 @@
-import { useEffect, useState, Fragment } from "react";
+import { useEffect, useState } from "react";
 import { Play, Search, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { NativeYouTubeAdCard } from "@/components/ads/NativeYouTubeAdCard";
+import { useAuth } from "@/contexts/AuthContext";
+import { showRewardedAd, isOnline } from "@/lib/admob";
+import { toast } from "sonner";
 
 // Add VITE_YOUTUBE_API_KEY to your .env file — get free key from Google Cloud Console > YouTube Data API v3
 const YT_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
+
+// Watch a rewarded ad before opening any YouTube link. Grants +5 XP on success.
+const useRewardedYouTubeOpener = () => {
+  const { user, refreshProfile } = useAuth();
+  return async (url: string) => {
+    if (!isOnline()) { toast.error("You need internet to access this channel"); return; }
+    const granted = await showRewardedAd();
+    if (!granted) { toast.error("Watch the full ad to access this channel"); return; }
+    if (user) {
+      const { data: prof } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
+      await supabase.from("profiles").update({ xp: (prof?.xp || 0) + 5 }).eq("id", user.id);
+      refreshProfile();
+      toast.success("+5 XP · Opening YouTube");
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+};
 
 interface YTResult {
   videoId: string;
