@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
 import { AnnouncementsSheet } from "@/components/AnnouncementsSheet";
 import { NotificationsSheet } from "@/components/NotificationsSheet";
+import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
 
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
