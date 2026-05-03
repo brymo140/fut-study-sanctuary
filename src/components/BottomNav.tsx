@@ -1,12 +1,12 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Search, Play, Download, Bookmark, User } from "lucide-react";
+import { Home, Search, Play, Download, User } from "lucide-react";
 
+// Saved tab merged into Downloads. Five-item bottom nav.
 const items = [
   { to: "/", label: "Home", icon: Home },
   { to: "/browse", label: "Browse", icon: Search },
   { to: "/watch", label: "Watch", icon: Play },
-  { to: "/downloads", label: "Downloads", icon: Download },
-  { to: "/saved", label: "Saved", icon: Bookmark },
+  { to: "/downloads", label: "Library", icon: Download },
   { to: "/profile", label: "Profile", icon: User },
 ];
 
@@ -15,7 +15,7 @@ export const BottomNav = () => {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
       <div className="app-shell">
-        <ul className="grid grid-cols-6">
+        <ul className="grid grid-cols-5">
           {items.map(({ to, label, icon: Icon }) => {
             const active =
               to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);

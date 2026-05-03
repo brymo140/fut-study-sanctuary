@@ -5,10 +5,12 @@ import { lovable } from "@/integrations/lovable";
 import { toast } from "sonner";
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSettings } from "@/contexts/SettingsContext";
 
 const Welcome = () => {
   const navigate = useNavigate();
   const { session, loading } = useAuth();
+  const { app_tagline } = useSettings();
 
   useEffect(() => {
     if (!loading && session) navigate("/", { replace: true });
@@ -29,7 +31,7 @@ const Welcome = () => {
             <Logo size="lg" />
           </div>
           <p className="text-sm text-muted-foreground mt-2 mb-1 font-medium">
-            FUTMinna · Your academic sanctuary
+            {app_tagline}
           </p>
           <p className="text-base text-foreground/80 max-w-xs mt-6 leading-relaxed">
             All your course materials, past questions, and learning channels — in one place.

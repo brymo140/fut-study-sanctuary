@@ -5,6 +5,7 @@ interface LogoProps {
   className?: string;
 }
 
+// HighVault brand mark: "HIGH" in electric blue, "VAULT" in purple.
 export const Logo = ({ size = "md", className = "" }: LogoProps) => {
   const sizes = {
     sm: "text-xl",
@@ -16,10 +17,10 @@ export const Logo = ({ size = "md", className = "" }: LogoProps) => {
       to="/"
       className={`font-bold tracking-tight ${sizes[size]} ${className}`}
       style={{ fontFamily: "'Space Grotesk', Inter, sans-serif" }}
-      aria-label="StudyHub FUTMinna home"
+      aria-label="HighVault home"
     >
-      <span className="text-primary">STUDY</span>
-      <span className="text-secondary">HUB</span>
+      <span style={{ color: "#3b8bf5" }}>HIGH</span>
+      <span style={{ color: "#9b5cf6" }}>VAULT</span>
     </Link>
   );
 };

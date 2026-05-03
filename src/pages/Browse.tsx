@@ -1,26 +1,38 @@
 import { useEffect, useState } from "react";
-import { Search, SlidersHorizontal, LayoutGrid, List as ListIcon } from "lucide-react";
+import { Search, X, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
-
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 type Tab = "materials" | "past";
 
+// Stable per-mount shuffle so users see the same random ordering until they
+// switch tabs / refilter.
+const shuffle = <T,>(arr: T[]) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
 const Browse = () => {
   const [tab, setTab] = useState<Tab>("materials");
   const [level, setLevel] = useState("All");
-  const [search, setSearch] = useState("");
-  const [view, setView] = useState<"list" | "grid">("list");
   const [pdfs, setPdfs] = useState<PdfSummary[]>([]);
+
+  // Search is hidden by default — opens via the magnifying-glass button.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     const load = async () => {
-      let q = supabase.from("pdfs").select("*").order("created_at", { ascending: false });
+      let q = supabase.from("pdfs").select("*").limit(80);
       q = q.eq("is_past_question", tab === "past");
       if (level !== "All") q = q.eq("level", level as "100L");
       const { data } = await q;
-      setPdfs((data as PdfSummary[]) || []);
+      setPdfs(shuffle((data as PdfSummary[]) || []));
     };
     load();
   }, [tab, level]);
@@ -34,7 +46,29 @@ const Browse = () => {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Browse</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Browse</h1>
+        <button
+          onClick={() => { setSearchOpen((v) => !v); if (searchOpen) setSearch(""); }}
+          aria-label="Search"
+          className="h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary"
+        >
+          {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4 text-primary" />}
+        </button>
+      </div>
+
+      {searchOpen && (
+        <div className="relative animate-fade-in">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search title or course code…"
+            className="w-full bg-surface border border-border rounded-2xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-primary"
+          />
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 surface-card p-1 rounded-xl">
@@ -54,35 +88,16 @@ const Browse = () => {
         ))}
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search title or course code…"
-          className="w-full bg-surface border border-border rounded-2xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-primary"
-        />
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide flex-1">
-          {LEVELS.map((l) => (
-            <button
-              key={l}
-              onClick={() => setLevel(l)}
-              className={`level-pill ${level === l ? "level-pill-active" : ""}`}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={() => setView(view === "list" ? "grid" : "list")}
-          className="h-9 w-9 rounded-lg surface-card flex items-center justify-center shrink-0"
-          aria-label="Toggle view"
-        >
-          {view === "list" ? <LayoutGrid className="h-4 w-4" /> : <ListIcon className="h-4 w-4" />}
-        </button>
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+        {LEVELS.map((l) => (
+          <button
+            key={l}
+            onClick={() => setLevel(l)}
+            className={`level-pill ${level === l ? "level-pill-active" : ""}`}
+          >
+            {l}
+          </button>
+        ))}
       </div>
 
       {filtered.length === 0 ? (
@@ -90,15 +105,11 @@ const Browse = () => {
           <SlidersHorizontal className="h-6 w-6 mx-auto mb-2 opacity-60" />
           Nothing matches your filters.
         </div>
-      ) : view === "list" ? (
+      ) : (
         <div className="space-y-2.5">
           {filtered.map((p) => (
             <PdfCard key={p.id} pdf={p} />
           ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3">
-          {filtered.map((p) => <PdfCard key={p.id} pdf={p} variant="trending" />)}
         </div>
       )}
     </div>

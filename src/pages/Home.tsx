@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Bell, Flame, Megaphone, Play } from "lucide-react";
-import { Logo } from "@/components/Logo";
+import { Bell, Flame, Megaphone, Play } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
 import { AnnouncementsSheet } from "@/components/AnnouncementsSheet";
 import { NotificationsSheet } from "@/components/NotificationsSheet";
 import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
+import { initPushNotifications } from "@/lib/pushNotifications";
 
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
@@ -22,21 +22,23 @@ interface YTChannel {
 
 const Home = () => {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const openYouTube = useRewardedYouTubeOpener();
   const [activeLevel, setActiveLevel] = useState<string>("All");
-  const [search, setSearch] = useState("");
   const [trending, setTrending] = useState<PdfSummary[]>([]);
   const [recent, setRecent] = useState<PdfSummary[]>([]);
   const [channels, setChannels] = useState<YTChannel[]>([]);
   const [annOpen, setAnnOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [hasUnread, setHasUnread] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Init push notifications on first home load.
+  useEffect(() => {
+    if (user?.id) initPushNotifications(user.id);
+  }, [user?.id]);
 
   useEffect(() => {
     const load = async () => {
-      const filter = activeLevel === "All" ? {} : { level: activeLevel };
-
       const trendingQ = supabase.from("pdfs").select("*").order("download_count", { ascending: false }).limit(6);
       const recentQ = supabase.from("pdfs").select("*").order("created_at", { ascending: false }).limit(10);
       const chQ = supabase.from("youtube_channels").select("id,channel_name,channel_url,thumbnail_url,level").eq("is_active", true).order("created_at", { ascending: false }).limit(8);
@@ -54,54 +56,61 @@ const Home = () => {
     load();
   }, [activeLevel]);
 
-  // Unread badge: any announcement or pdf newer than last seen timestamp
-  useEffect(() => {
-    const check = async () => {
-      const lastSeen = localStorage.getItem("notifs:lastSeen") || new Date(Date.now() - 7 * 86400000).toISOString();
-      const [{ data: ann }, { data: pdfs }] = await Promise.all([
-        supabase.from("announcements").select("id,target_level,created_at").gt("created_at", lastSeen).limit(20),
-        supabase.from("pdfs").select("id,level,created_at").gt("created_at", lastSeen).limit(20),
-      ]);
-      const lvl = profile?.level ?? null;
-      const annHit = (ann || []).some((a: any) => !a.target_level || !lvl || a.target_level === lvl);
-      const pdfHit = (pdfs || []).some((p: any) => !lvl || p.level === lvl);
-      setHasUnread(annHit || pdfHit);
-    };
-    check();
-  }, [profile?.level, notifOpen]);
+  // Compute unread count using notification_reads (per-user dismissals).
+  const computeUnread = async () => {
+    if (!user) return;
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
+    const lvl = profile?.level ?? null;
+    const dept = profile?.department ?? null;
 
-  // Realtime: flash the bell when new announcements / pdfs arrive while the app is open
+    const [{ data: ann }, { data: pdfs }, { data: reads }] = await Promise.all([
+      supabase.from("announcements").select("id,target_level,created_at,is_active").gte("created_at", since).eq("is_active", true).limit(100),
+      supabase.from("pdfs").select("id,level,department,is_general,created_at").gte("created_at", since).limit(100),
+      supabase.from("notification_reads").select("notification_key").eq("user_id", user.id),
+    ]);
+    const readKeys = new Set((reads || []).map((r: any) => r.notification_key));
+
+    let count = 0;
+    for (const a of (ann || []) as any[]) {
+      if (a.target_level && lvl && a.target_level !== lvl) continue;
+      if (!readKeys.has(`ann-${a.id}`)) count++;
+    }
+    for (const p of (pdfs || []) as any[]) {
+      const isGeneral = p.is_general === true;
+      if (!isGeneral) {
+        if (lvl && p.level !== lvl) continue;
+        if (p.department && dept && p.department !== dept) continue;
+      }
+      if (!readKeys.has(`pdf-${p.id}`)) count++;
+    }
+    setUnreadCount(count);
+  };
+
+  useEffect(() => { computeUnread(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user?.id, profile?.level, profile?.department, notifOpen]);
+
+  // Realtime: bump unread when new content arrives.
   useEffect(() => {
     const channel = supabase
       .channel("home-notifs")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, (payload: any) => {
-        const lvl = profile?.level ?? null;
-        const t = payload.new?.target_level;
-        if (!t || !lvl || t === lvl) setHasUnread(true);
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "pdfs" }, (payload: any) => {
-        const lvl = profile?.level ?? null;
-        if (!lvl || payload.new?.level === lvl) setHasUnread(true);
-      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, () => computeUnread())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "pdfs" }, () => computeUnread())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [profile?.level]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.level, profile?.department]);
 
   const initials = (profile?.full_name || profile?.email || "U")
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
-
-  const filteredRecent = search
-    ? recent.filter((p) =>
-        p.title.toLowerCase().includes(search.toLowerCase()) ||
-        p.course_code.toLowerCase().includes(search.toLowerCase())
-      )
-    : recent;
+  const firstName = (profile?.full_name || profile?.email || "there").split(" ")[0];
 
   return (
     <div className="space-y-5">
-      {/* Header */}
+      {/* Header — greeting + bell + avatar */}
       <header className="flex items-center justify-between">
-        <Logo size="md" />
+        <div>
+          <p className="text-lg font-bold">👋 Hello, {firstName}!</p>
+          <p className="text-[11px] text-muted-foreground">Welcome back to HighVault</p>
+        </div>
         <div className="flex items-center gap-2">
           {(profile?.streak ?? 0) > 0 && (
             <div className="flex items-center gap-1 px-2 py-1 rounded-full surface-card text-xs font-semibold">
@@ -114,7 +123,11 @@ const Home = () => {
           </button>
           <button onClick={() => setNotifOpen(true)} aria-label="Notifications" className="relative h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary">
             <Bell className="h-4 w-4 text-foreground/80" />
-            {hasUnread && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-destructive" />}
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
           <button
             onClick={() => navigate("/profile")}
@@ -127,17 +140,6 @@ const Home = () => {
           </button>
         </div>
       </header>
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search course, code, level…"
-          className="w-full bg-surface border border-border rounded-2xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-primary"
-        />
-      </div>
 
       {/* Level pills */}
       <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4">
@@ -152,7 +154,6 @@ const Home = () => {
         ))}
       </div>
 
-      {/* Trending */}
       <Section title="Trending this week" subtitle="Most downloaded by your peers">
         {trending.length === 0 ? (
           <EmptyHint text="No trending materials yet. Check back soon." />
@@ -170,7 +171,6 @@ const Home = () => {
         )}
       </Section>
 
-      {/* Learning Channels */}
       <Section
         title="Learning channels"
         subtitle="Curated YouTube tutors for your level"
@@ -203,15 +203,12 @@ const Home = () => {
         )}
       </Section>
 
-      
-
-      {/* Recently added */}
       <Section title="Recently added" subtitle="Fresh uploads from class reps">
-        {filteredRecent.length === 0 ? (
+        {recent.length === 0 ? (
           <EmptyHint text="Nothing here yet — uploads will show up as they arrive." />
         ) : (
           <div className="space-y-2.5">
-            {filteredRecent.map((p) => <PdfCard key={p.id} pdf={p} />)}
+            {recent.map((p) => <PdfCard key={p.id} pdf={p} />)}
           </div>
         )}
       </Section>
@@ -221,7 +218,8 @@ const Home = () => {
         open={notifOpen}
         onOpenChange={setNotifOpen}
         userLevel={profile?.level}
-        onSeen={() => setHasUnread(false)}
+        userDepartment={profile?.department}
+        onChange={computeUnread}
       />
     </div>
   );
