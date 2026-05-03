@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Trash2, Pencil, Check, X, Upload, Plus, BookOpen, ArrowLeft } from "lucide-react";
 import { SectionHeader, Field, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
 import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
+import { sendPushNotification } from "@/lib/pushNotifications";
 
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
@@ -105,6 +106,13 @@ export const AdminPdfs = () => {
       setActiveSubject(subj as Subject);
       setModules([{ module_number: 1, module_title: "", file: null }]);
       setStep("modules");
+      sendPushNotification({
+        target_level: subjectForm.level,
+        target_department: subjectForm.department || null,
+        title: "New material available! 📚",
+        body: `New study material added for ${subjectForm.level} students`,
+        url: `/pdf/${(subj as Subject).id}`,
+      });
       toast.success("Subject created — now add modules");
       reload();
     } catch (e: any) {

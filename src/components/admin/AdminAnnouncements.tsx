@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Trash2, Pencil, Plus } from "lucide-react";
 import { SectionHeader, Field, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
 import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
+import { sendPushNotification } from "@/lib/pushNotifications";
 
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
@@ -34,6 +35,13 @@ export const AdminAnnouncements = () => {
     };
     const { error } = await withSchemaRetry(async () => await supabase.from("announcements").insert(payload));
     if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
+    sendPushNotification({
+      target_level: form.target_level || "all",
+      target_department: null,
+      title: "HighVault Announcement 📢",
+      body: form.title.slice(0, 50),
+      url: "/",
+    });
     toast.success("Announcement posted");
     setForm(empty); reload();
   };
