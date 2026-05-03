@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
 import { AnnouncementsSheet } from "@/components/AnnouncementsSheet";
 import { NotificationsSheet } from "@/components/NotificationsSheet";
+import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
 
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
@@ -22,6 +23,7 @@ interface YTChannel {
 const Home = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const openYouTube = useRewardedYouTubeOpener();
   const [activeLevel, setActiveLevel] = useState<string>("All");
   const [search, setSearch] = useState("");
   const [trending, setTrending] = useState<PdfSummary[]>([]);
@@ -179,9 +181,9 @@ const Home = () => {
         ) : (
           <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
             {channels.map((c) => (
-              <a
-                key={c.id} href={c.channel_url} target="_blank" rel="noreferrer"
-                className="shrink-0 w-44 surface-card p-3 hover:border-primary transition-colors"
+              <button
+                key={c.id} onClick={() => openYouTube(c.channel_url)} type="button"
+                className="text-left shrink-0 w-44 surface-card p-3 hover:border-primary transition-colors"
               >
                 <div className="aspect-video rounded-lg bg-gradient-cover mb-2 flex items-center justify-center overflow-hidden">
                   {c.thumbnail_url
@@ -195,7 +197,7 @@ const Home = () => {
                     <Play className="h-3 w-3 text-white fill-white" />
                   </span>
                 </div>
-              </a>
+              </button>
             ))}
           </div>
         )}
