@@ -23,6 +23,7 @@ interface YTChannel {
 const Home = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const openYouTube = useRewardedYouTubeOpener();
   const [activeLevel, setActiveLevel] = useState<string>("All");
   const [search, setSearch] = useState("");
   const [trending, setTrending] = useState<PdfSummary[]>([]);
