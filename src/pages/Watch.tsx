@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Play, Search, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+
 import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
 
 // Add VITE_YOUTUBE_API_KEY to your .env file — get free key from Google Cloud Console > YouTube Data API v3
