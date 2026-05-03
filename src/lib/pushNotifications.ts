@@ -28,9 +28,9 @@ export const initPushNotifications = async (userId: string) => {
 
   try {
     // Dynamic import so web bundles don't fail without the native plugin.
-    const mod: any = await import(
-      /* @vite-ignore */ "@capacitor/push-notifications"
-    ).catch(() => null);
+    // String-built specifier prevents Vite from analyzing/resolving at build time.
+    const spec = ["@capacitor", "push-notifications"].join("/");
+    const mod: any = await import(/* @vite-ignore */ spec).catch(() => null);
     if (!mod) return;
     const { PushNotifications } = mod;
 
