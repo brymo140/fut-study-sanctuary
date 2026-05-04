@@ -109,8 +109,8 @@ export const AdminPdfs = () => {
       sendPushNotification({
         target_level: subjectForm.level,
         target_department: subjectForm.department || null,
-        title: "New material available! 📚",
-        body: `New study material added for ${subjectForm.level} students`,
+        title: "HighVault 📚",
+        body: `New study material added for ${subjectForm.level} students! 📚`,
         url: `/pdf/${(subj as Subject).id}`,
       });
       toast.success("Subject created — now add modules");

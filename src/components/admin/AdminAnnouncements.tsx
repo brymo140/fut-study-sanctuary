@@ -38,8 +38,8 @@ export const AdminAnnouncements = () => {
     sendPushNotification({
       target_level: form.target_level || "all",
       target_department: null,
-      title: "HighVault Announcement 📢",
-      body: form.title.slice(0, 50),
+      title: "HighVault 📚",
+      body: form.title.slice(0, 60),
       url: "/",
     });
     toast.success("Announcement posted");

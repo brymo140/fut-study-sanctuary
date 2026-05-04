@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Trash2, Pencil, Plus } from "lucide-react";
 import { SectionHeader, Field, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
 import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
+import { sendPushNotification } from "@/lib/pushNotifications";
 
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
@@ -44,6 +45,13 @@ export const AdminYouTube = () => {
       is_active: chForm.is_active,
     }));
     if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
+    sendPushNotification({
+      target_level: chForm.level || "all",
+      target_department: null,
+      title: "HighVault 📚",
+      body: `New learning channel added for ${chForm.level || "all"} students! 🎥`,
+      url: "/watch",
+    });
     toast.success("Channel added");
     setChForm(ch0); reload();
   };

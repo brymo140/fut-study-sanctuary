@@ -87,6 +87,10 @@ const Profile = () => {
         <LogOut className="h-4 w-4 mr-2" /> Sign out
       </Button>
 
+      <p className="text-center text-[11px] text-muted-foreground/70 pt-2">
+        🍯🐝 Designed &amp; Built by HIGHBEE
+      </p>
+
       <div className="h-4" />
     </div>
   );
