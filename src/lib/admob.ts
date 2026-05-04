@@ -55,6 +55,8 @@ export const initAdMob = async () => {
     return;
   }
   try {
+    const appId = await getAdMobAppId();
+    console.info("[AdMob] Initializing with app id", appId);
     await AdMob.initialize({
       testingDevices: ["EMULATOR"],
       initializeForTesting: true,
