@@ -13,25 +13,38 @@ import {
 } from "@capacitor-community/admob";
 import { Capacitor } from "@capacitor/core";
 
+import { supabase } from "@/integrations/supabase/client";
+
 export const isOnline = () =>
   typeof navigator === "undefined" ? true : navigator.onLine;
 
 const isNative = () =>
   typeof Capacitor !== "undefined" && Capacitor.isNativePlatform?.();
 
-// AdMob App ID — replace with real ID when publishing
-// Android: ca-app-pub-4988426041877845~XXXXXXXXXX
-// iOS:     ca-app-pub-4988426041877845~XXXXXXXXXX
-
-// Test Ad Unit IDs (Google's official test IDs — safe during development)
+// PRODUCTION: Replace test ad unit IDs below with real ad unit IDs
+// from AdMob dashboard under ca-app-pub-4988426041877845
+// before building the production APK.
 export const AD_UNITS = {
   banner: "ca-app-pub-3940256099942544/6300978111",
   interstitial: "ca-app-pub-3940256099942544/1033173712",
   rewarded: "ca-app-pub-3940256099942544/5224354917",
   rewardedInterstitial: "ca-app-pub-3940256099942544/5354046379",
 };
-// NOTE: Replace the above with real ad unit IDs from ca-app-pub-4988426041877845
-// when building the production APK.
+
+// Reads the live AdMob App ID from the app_settings table so admin changes
+// propagate without a code release. Falls back to the default publisher ID.
+export const getAdMobAppId = async (): Promise<string> => {
+  try {
+    const { data } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "admob_app_id")
+      .maybeSingle();
+    return (data as any)?.value || "ca-app-pub-4988426041877845";
+  } catch {
+    return "ca-app-pub-4988426041877845";
+  }
+};
 
 let initialized = false;
 
