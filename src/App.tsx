@@ -8,6 +8,8 @@ import { SettingsProvider } from "@/contexts/SettingsContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { MaintenanceGate } from "@/components/MaintenanceGate";
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 import Welcome from "./pages/Welcome";
 import Signup from "./pages/Signup";
@@ -35,11 +37,13 @@ const Protected = ({ children }: { children: React.ReactNode }) => (
 );
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner theme="dark" />
-      <BrowserRouter>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner theme="dark" />
+        <OfflineBanner />
+        <BrowserRouter>
         <AuthProvider>
           <SettingsProvider>
             <Routes>
