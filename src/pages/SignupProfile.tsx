@@ -63,7 +63,7 @@ const SignupProfile = () => {
 
     await refreshProfile();
     sessionStorage.removeItem("signup_partial");
-    toast.success("Welcome to StudyHub!");
+    toast.success("Welcome to HighVault!");
     navigate("/", { replace: true });
   };
 
