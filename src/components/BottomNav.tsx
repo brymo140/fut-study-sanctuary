@@ -13,7 +13,14 @@ const items = [
 export const BottomNav = () => {
   const location = useLocation();
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
+    <nav
+      className="fixed left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur-md"
+      style={{
+        // Sit ABOVE the AdMob banner (~50px) and respect bottom safe-area inset.
+        bottom: "calc(50px + var(--sab))",
+        paddingBottom: "0px",
+      }}
+    >
       <div className="app-shell">
         <ul className="grid grid-cols-5">
           {items.map(({ to, label, icon: Icon }) => {

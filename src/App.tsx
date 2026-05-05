@@ -24,6 +24,7 @@ import Watch from "./pages/Watch";
 import Downloads from "./pages/Downloads";
 import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
+import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -53,6 +54,8 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+
 
               <Route path="/" element={<Protected><Home /></Protected>} />
               <Route path="/browse" element={<Protected><Browse /></Protected>} />

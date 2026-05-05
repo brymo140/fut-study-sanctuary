@@ -3,6 +3,7 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { withSchemaRetry } from "@/lib/supabaseRetry";
+import { registerNativeAuthDeepLinks } from "@/lib/nativeDeepLinks";
 
 interface Profile {
   id: string;
@@ -170,7 +171,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     });
 
-    return () => sub.subscription.unsubscribe();
+    // Native deep-link handler for OAuth callbacks (no-op on web).
+    const cleanupDeepLinks = registerNativeAuthDeepLinks(() => {
+      // Session is set by the listener; auth state change above will pick it up.
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+      cleanupDeepLinks();
+    };
   }, []);
 
   const refreshProfile = async () => {
