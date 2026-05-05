@@ -165,7 +165,7 @@ export const AITutor = () => {
       <button
         onClick={() => setOpen(true)}
         aria-label="Open AI study assistant"
-        className="fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-gradient-brand shadow-glow flex items-center justify-center transition-transform hover:scale-110 animate-pulse-glow"
+        className="fixed bottom-32 right-4 z-40 h-14 w-14 rounded-full bg-gradient-brand shadow-glow flex items-center justify-center transition-transform hover:scale-110 animate-pulse-glow"
       >
         <Bot className="h-6 w-6 text-white" />
       </button>
