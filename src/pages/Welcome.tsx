@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
-import { lovable } from "@/integrations/lovable";
+import { signInWithGoogleSmart } from "@/lib/nativeAuth";
 import { toast } from "sonner";
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,10 +17,8 @@ const Welcome = () => {
   }, [loading, session, navigate]);
 
   const handleGoogle = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) toast.error("Could not start Google sign in");
+    const result = await signInWithGoogleSmart(window.location.origin);
+    if ((result as any)?.error) toast.error("Could not start Google sign in");
   };
 
   return (
