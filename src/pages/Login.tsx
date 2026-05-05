@@ -5,7 +5,7 @@ import { Logo } from "@/components/Logo";
 import { AuthBack } from "@/components/AuthBack";
 import { PasswordInput } from "@/components/PasswordInput";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { signInWithGoogleSmart } from "@/lib/nativeAuth";
 import { toast } from "sonner";
 import { isHardcodedAdminEmail, useAuth } from "@/contexts/AuthContext";
 
@@ -82,8 +82,8 @@ const Login = () => {
 
   const google = async () => {
     localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (r.error) toast.error("Could not start Google sign in");
+    const r = await signInWithGoogleSmart(window.location.origin);
+    if ((r as any)?.error) toast.error("Could not start Google sign in");
   };
 
   return (
