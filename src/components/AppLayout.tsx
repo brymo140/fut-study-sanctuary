@@ -31,9 +31,9 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    // Extra bottom padding (pb-32) reserves room for the AdMob banner so
-    // it never overlaps the bottom nav.
-    <div className="min-h-screen pb-32">
+    // Bottom padding reserves space for the bottom nav + AdMob banner + safe-area inset
+    // so content is never hidden behind native chrome.
+    <div className="min-h-screen" style={{ paddingBottom: "var(--bottom-chrome)" }}>
       <div className={`${isAdmin ? "max-w-5xl mx-auto" : "app-shell"} px-4 pt-4`}>{children}</div>
       {!isAdmin && <AITutor />}
       <BottomNav />
