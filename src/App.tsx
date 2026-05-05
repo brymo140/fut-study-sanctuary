@@ -55,7 +55,7 @@ const App = () => (
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/~oauth" element={<AuthCallback />} />
+
 
               <Route path="/" element={<Protected><Home /></Protected>} />
               <Route path="/browse" element={<Protected><Browse /></Protected>} />
