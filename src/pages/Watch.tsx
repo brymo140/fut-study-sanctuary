@@ -40,13 +40,24 @@ const Watch = () => {
 
   useEffect(() => {
     const load = async () => {
-      let chQ = supabase.from("youtube_channels").select("*").eq("is_active", true).order("created_at", { ascending: false });
-      if (level !== "All") chQ = chQ.eq("level", level as "100L");
-      const { data: ch } = await chQ;
-      setChannels((ch as Channel[]) || []);
-
-      const { data: v } = await supabase.from("youtube_videos").select("*").eq("is_featured", true).order("created_at", { ascending: false }).limit(10);
-      setFeatured((v as Video[]) || []);
+      try {
+        let chQ = supabase.from("youtube_channels").select("*").eq("is_active", true).order("created_at", { ascending: false });
+        if (level !== "All") chQ = chQ.eq("level", level as "100L");
+        const { data: ch, error: chErr } = await chQ;
+        if (chErr) console.warn("channels query failed", chErr);
+        setChannels(((ch as Channel[]) || []).filter(Boolean));
+      } catch (e) {
+        console.warn("channels load failed", e);
+        setChannels([]);
+      }
+      try {
+        const { data: v, error: vErr } = await supabase.from("youtube_videos").select("*").eq("is_featured", true).order("created_at", { ascending: false }).limit(10);
+        if (vErr) console.warn("videos query failed", vErr);
+        setFeatured(((v as Video[]) || []).filter(Boolean));
+      } catch (e) {
+        console.warn("videos load failed", e);
+        setFeatured([]);
+      }
     };
     load();
   }, [level]);
