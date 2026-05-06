@@ -21,6 +21,7 @@
 		"StatusBar": {
 			"style": "dark",
 			"backgroundColor": "#0a0a12"
-		}
+		},
+		"Filesystem": {}
 	}
 }
