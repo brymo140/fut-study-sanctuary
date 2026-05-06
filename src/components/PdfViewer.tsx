@@ -43,8 +43,8 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, title }: Props) => 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-none w-screen h-screen sm:rounded-none p-0 bg-background border-0 [&>button]:hidden"
-        onContextMenu={(e) => e.preventDefault()}
+        className="max-w-none w-screen sm:rounded-none p-0 bg-background border-0 [&>button]:hidden flex flex-col"
+        style={{ height: '100dvh', paddingBottom: 'calc(env(safe-area-inset-bottom) + 60px)' }}
       >
         <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface">
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -74,7 +74,8 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, title }: Props) => 
               src={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`}
               title={title || "PDF"}
               className="w-full h-full"
-              style={{ border: 0 }}
+              style={{ border: 0, display: 'block' }}
+              sandbox="allow-scripts allow-same-origin"
               onContextMenu={(e) => e.preventDefault()}
             />
           )}
