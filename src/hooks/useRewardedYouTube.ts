@@ -11,14 +11,23 @@ export const useRewardedYouTubeOpener = () => {
   return async (url: string) => {
     if (!url) return;
     if (!isOnline()) { toast.error("You need internet to open YouTube"); return; }
-    const granted = await showRewardedAd();
-    if (!granted) { toast.error("Watch the full ad to continue"); return; }
-    if (user) {
-      const { data: prof } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
-      await supabase.from("profiles").update({ xp: (prof?.xp || 0) + 5 }).eq("id", user.id);
-      refreshProfile();
-      toast.success("+5 XP · Opening YouTube");
+    try {
+      const granted = await showRewardedAd();
+      if (!granted) { toast.error("Watch the full ad to continue"); return; }
+      if (user) {
+        try {
+          const { data: prof } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
+          await supabase.from("profiles").update({ xp: (prof?.xp || 0) + 5 }).eq("id", user.id);
+          refreshProfile();
+          toast.success("+5 XP · Opening YouTube");
+        } catch (e) {
+          console.warn("XP update failed", e);
+        }
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      console.error("Rewarded ad failed", e);
+      toast.error("Couldn't load the ad. Try again.");
     }
-    window.open(url, "_blank", "noopener,noreferrer");
   };
 };
