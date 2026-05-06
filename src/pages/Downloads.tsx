@@ -132,7 +132,7 @@ const Downloads = () => {
 
   return (
     <div className="space-y-5 relative">
-      <Confetti active={confetti} />
+      {confetti && <Confetti durationMs={1500} />}
       <div>
         <h1 className="text-2xl font-bold">Library 📚</h1>
         <p className="text-sm text-muted-foreground">
