@@ -1,0 +1,3 @@
+ALTER TABLE public.notification_reads RENAME COLUMN notification_key TO announcement_id;
+ALTER TABLE public.notification_reads DROP CONSTRAINT IF EXISTS notification_reads_user_id_notification_key_key;
+ALTER TABLE public.notification_reads ADD CONSTRAINT notification_reads_user_announcement_unique UNIQUE (user_id, announcement_id);
