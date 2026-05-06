@@ -26,6 +26,7 @@ interface Video {
 }
 
 const Watch = () => {
+  const [pageError, setPageError] = useState<string | null>(null);
   const openYouTube = useRewardedYouTubeOpener();
   const [level, setLevel] = useState("All");
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -40,12 +41,13 @@ const Watch = () => {
 
   useEffect(() => {
       const load = async () => {
-        try {
-          let chQ = supabase
-            .from("youtube_channels")
-            .select("*")
-            .eq("is_active", true)
-            .order("created_at", { ascending: false });
+          try {
+          // existing code
+        } catch(e) {
+        console.error('Watch page error:', e);
+        setPageError('Could not load channels');
+        }
+      };
           if (level !== "All") chQ = chQ.eq("level", level as any);
           const { data: ch, error: chError } = await chQ;
           if (chError) {
@@ -88,6 +90,11 @@ const Watch = () => {
       setResults([]);
       setSearchQuery(query);
       return;
+    if (pageError) return (
+      <div className="p-8 text-center text-muted-foreground">
+      <p>📺 {pageError}</p>
+      </div>
+      );
     }
     setSearching(true);
     setSearchError(null);
