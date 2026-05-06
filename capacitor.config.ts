@@ -1,0 +1,27 @@
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.highvault.futminna',
+  appName: 'HighVault',
+  webDir: 'dist',
+  server: {
+    androidScheme: 'https',
+  },
+  plugins: {
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert'],
+    },
+    SplashScreen: {
+      launchShowDuration: 2000,
+      backgroundColor: '#0a0a12',
+      showSpinner: false,
+    },
+    StatusBar: {
+      style: 'dark',
+      backgroundColor: '#0a0a12',
+    },
+    Filesystem: {},
+  },
+};
+
+export default config;

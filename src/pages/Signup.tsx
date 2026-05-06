@@ -68,12 +68,15 @@ const Signup = () => {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase.from("profiles").update({
+      await supabase.from("profiles").upsert({
+        id: user.id,
+        email: user.email ?? form.email.trim(),
         full_name: form.full_name,
         level: form.level,
         department: form.department,
         matric_no: form.matric_no || null,
-      }).eq("id", user.id);
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "id" });
     }
 
     sessionStorage.setItem("signup_partial", "1");

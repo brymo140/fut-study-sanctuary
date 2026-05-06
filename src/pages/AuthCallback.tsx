@@ -1,48 +1,88 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
+import { Button } from "@/components/ui/button";
+import { CheckCircle2, Loader2 } from "lucide-react";
 
 const AuthCallback = () => {
   const navigate = useNavigate();
+  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
 
   useEffect(() => {
     const handle = async () => {
-      // 1. If session is already restored (PKCE flow on web), go home.
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate("/", { replace: true });
-        return;
-      }
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) { setStatus("success"); return; }
 
-      // 2. Otherwise parse access/refresh tokens from the URL hash
-      //    (email confirmation links and some OAuth flows return them this way).
-      const hash = window.location.hash.startsWith("#")
-        ? window.location.hash.substring(1)
-        : window.location.hash;
-      const params = new URLSearchParams(hash);
-      const access_token = params.get("access_token");
-      const refresh_token = params.get("refresh_token");
+        const hash = window.location.hash.startsWith("#")
+          ? window.location.hash.substring(1)
+          : window.location.hash;
+        const hashParams = new URLSearchParams(hash);
+        const queryParams = new URLSearchParams(window.location.search);
 
-      if (access_token && refresh_token) {
-        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-        if (!error) {
-          navigate("/", { replace: true });
-          return;
+        const access_token = hashParams.get("access_token") || queryParams.get("access_token");
+        const refresh_token = hashParams.get("refresh_token") || queryParams.get("refresh_token");
+        const code = queryParams.get("code");
+
+        if (access_token && refresh_token) {
+          const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+          if (!error) { setStatus("success"); return; }
+        } else if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error) { setStatus("success"); return; }
         }
-      }
 
-      // 3. Nothing usable — bounce to login.
-      navigate("/login", { replace: true });
+        // No usable token — wait briefly for any onAuthStateChange event then check again.
+        setTimeout(async () => {
+          const { data: { session: s2 } } = await supabase.auth.getSession();
+          setStatus(s2 ? "success" : "error");
+        }, 800);
+      } catch (e) {
+        console.error("auth callback failed", e);
+        setStatus("error");
+      }
     };
     handle();
-  }, [navigate]);
+  }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
+    <div className="min-h-screen flex items-center justify-center px-6">
+      <div className="flex flex-col items-center gap-5 text-center max-w-sm">
         <Logo size="md" />
-        <p className="text-sm text-muted-foreground">Completing sign in…</p>
+        {status === "loading" && (
+          <>
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Completing sign in…</p>
+          </>
+        )}
+        {status === "success" && (
+          <>
+            <div className="h-16 w-16 rounded-full bg-success/15 flex items-center justify-center animate-in zoom-in duration-300">
+              <CheckCircle2 className="h-10 w-10 text-success" />
+            </div>
+            <h1 className="text-xl font-bold">Email confirmed! 🎉</h1>
+            <p className="text-sm text-muted-foreground">Welcome to HighVault. You're all set.</p>
+            <Button
+              onClick={() => navigate("/", { replace: true })}
+              size="lg"
+              className="w-full bg-gradient-button border border-primary/40 text-primary h-12 rounded-xl font-semibold"
+            >
+              Continue to app
+            </Button>
+          </>
+        )}
+        {status === "error" && (
+          <>
+            <p className="text-sm text-destructive">We couldn't confirm your session. Please log in.</p>
+            <Button
+              onClick={() => navigate("/login", { replace: true })}
+              className="w-full bg-gradient-button border border-primary/40 text-primary h-12 rounded-xl font-semibold"
+            >
+              Go to login
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

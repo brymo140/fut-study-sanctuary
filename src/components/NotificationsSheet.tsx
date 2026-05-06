@@ -49,10 +49,10 @@ export const NotificationsSheet = ({ open, onOpenChange, userLevel, userDepartme
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(50),
-      supabase.from("notification_reads").select("notification_key").eq("user_id", user.id),
+      supabase.from("notification_reads").select("announcement_id").eq("user_id", user.id),
     ]);
 
-    const readKeys = new Set(((reads || []) as any[]).map((r) => r.notification_key));
+    const readKeys = new Set(((reads || []) as any[]).map((r) => r.announcement_id));
 
     const annList: NotifItem[] = ((ann || []) as any[])
       .filter((a) => !a.target_level || !userLevel || a.target_level === userLevel)
@@ -97,8 +97,8 @@ export const NotificationsSheet = ({ open, onOpenChange, userLevel, userDepartme
     // Optimistic remove
     setItems((prev) => prev.filter((x) => x.key !== n.key));
     await supabase.from("notification_reads").upsert(
-      { user_id: user.id, notification_key: n.key },
-      { onConflict: "user_id,notification_key" }
+      { user_id: user.id, announcement_id: n.key },
+      { onConflict: "user_id,announcement_id" }
     );
     onChange?.();
     if (navigateTo) {
@@ -109,9 +109,9 @@ export const NotificationsSheet = ({ open, onOpenChange, userLevel, userDepartme
 
   const markAllRead = async () => {
     if (!user || items.length === 0) return;
-    const rows = items.map((n) => ({ user_id: user.id, notification_key: n.key }));
+    const rows = items.map((n) => ({ user_id: user.id, announcement_id: n.key }));
     setItems([]);
-    await supabase.from("notification_reads").upsert(rows, { onConflict: "user_id,notification_key" });
+    await supabase.from("notification_reads").upsert(rows, { onConflict: "user_id,announcement_id" });
     onChange?.();
   };
 

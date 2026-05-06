@@ -182,20 +182,20 @@ export type Database = {
       }
       notification_reads: {
         Row: {
+          announcement_id: string
           id: string
-          notification_key: string
           read_at: string
           user_id: string
         }
         Insert: {
+          announcement_id: string
           id?: string
-          notification_key: string
           read_at?: string
           user_id: string
         }
         Update: {
+          announcement_id?: string
           id?: string
-          notification_key?: string
           read_at?: string
           user_id?: string
         }
