@@ -201,7 +201,7 @@ export const AITutor = () => {
               </div>
             </div>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
               {messages.length === 0 && (
                 <div className="text-center py-8">
                   <div className="inline-flex h-16 w-16 rounded-2xl bg-gradient-brand items-center justify-center mb-4">
@@ -287,7 +287,7 @@ export const AITutor = () => {
               </div>
             )}
 
-            <div className="p-3 border-t border-border flex gap-2 items-center">
+            <div className="p-3 border-t border-border flex gap-2 items-center" onClick={(e) => e.stopPropagation()}>
               <input ref={fileInput} type="file" accept="image/*" className="hidden" onChange={handlePickImage} />
               <button
                 onClick={() => fileInput.current?.click()}
