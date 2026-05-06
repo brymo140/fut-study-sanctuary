@@ -40,47 +40,46 @@ const Watch = () => {
   const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
-      const load = async () => {
-          try {
-          // existing code
-        } catch(e) {
-        console.error('Watch page error:', e);
-        setPageError('Could not load channels');
-        }
-      };
-          if (level !== "All") chQ = chQ.eq("level", level as any);
-          const { data: ch, error: chError } = await chQ;
-          if (chError) {
-            console.error("Channels error:", chError);
-            setChannels([]);
-          } else {
-            setChannels((ch as Channel[]) || []);
-          }
-        } catch (e) {
-          console.error("Watch page load error:", e);
-          setChannels([]);
-        }
-    
-        try {
-          const { data: v, error: vError } = await supabase
-            .from("youtube_videos")
-            .select("*")
-            .eq("is_featured", true)
-            .order("created_at", { ascending: false })
-            .limit(10);
-          if (vError) {
-            console.error("Videos error:", vError);
-            setFeatured([]);
-          } else {
-            setFeatured((v as Video[]) || []);
-          }
-        } catch (e) {
-          console.error("Featured videos error:", e);
-          setFeatured([]);
-        }
-      };
-      load();
-    }, [level]);
+  const load = async () => {
+    try {
+      let chQ = supabase
+        .from("youtube_channels")
+        .select("*")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+      if (level !== "All") chQ = chQ.eq("level", level as any);
+      const { data: ch, error: chError } = await chQ;
+      if (chError) {
+        console.error("Channels error:", chError);
+        setChannels([]);
+      } else {
+        setChannels((ch as Channel[]) || []);
+      }
+    } catch (e) {
+      console.error("Watch page load error:", e);
+      setChannels([]);
+    }
+
+    try {
+      const { data: v, error: vError } = await supabase
+        .from("youtube_videos")
+        .select("*")
+        .eq("is_featured", true)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (vError) {
+        console.error("Videos error:", vError);
+        setFeatured([]);
+      } else {
+        setFeatured((v as Video[]) || []);
+      }
+    } catch (e) {
+      console.error("Featured videos error:", e);
+      setFeatured([]);
+    }
+  };
+  load();
+}, [level]);
 
   const runSearch = async (q: string) => {
     const query = q.trim();
