@@ -66,9 +66,9 @@ const Home = () => {
     const [{ data: ann }, { data: pdfs }, { data: reads }] = await Promise.all([
       supabase.from("announcements").select("id,target_level,created_at,is_active").gte("created_at", since).eq("is_active", true).limit(100),
       supabase.from("pdfs").select("id,level,department,is_general,created_at").gte("created_at", since).limit(100),
-      supabase.from("notification_reads").select("notification_key").eq("user_id", user.id),
+      supabase.from("notification_reads").select("announcement_id").eq("user_id", user.id),
     ]);
-    const readKeys = new Set((reads || []).map((r: any) => r.notification_key));
+    const readKeys = new Set((reads || []).map((r: any) => r.announcement_id));
 
     let count = 0;
     for (const a of (ann || []) as any[]) {
