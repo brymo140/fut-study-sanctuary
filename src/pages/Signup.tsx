@@ -42,7 +42,7 @@ const Signup = () => {
       email: form.email.trim(),
       password: form.password,
       options: {
-        emailRedirectTo: `${window.location.origin}/`,
+        emailRedirectTo: `https://fut-study-sanctuary.lovable.app/auth/callback`,
         data: { full_name: form.full_name },
       },
     });
