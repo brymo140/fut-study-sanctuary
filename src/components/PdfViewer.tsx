@@ -71,7 +71,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, title }: Props) => 
             </div>
           ) : (
             <iframe
-              src={`${url}#toolbar=0&navpanes=0&view=FitH`}
+              src={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`}
               title={title || "PDF"}
               className="w-full h-full"
               style={{ border: 0 }}
