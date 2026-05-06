@@ -175,8 +175,7 @@ export const AITutor = () => {
         <div className="fixed inset-0 z-50 flex items-end" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
           <div
-            className="relative w-full app-shell h-[80vh] surface-elevated rounded-t-3xl rounded-b-none border-t border-x flex flex-col animate-slide-up"
-            onClick={(e) => e.stopPropagation()}
+            className="relative w-full app-shell h-[75vh] mb-16 surface-elevated rounded-t-3xl rounded-b-none border-t border-x flex flex-col animate-slide-up"
           >
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-3">
