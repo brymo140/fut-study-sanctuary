@@ -15,6 +15,7 @@ const schema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
   level: z.enum(["100L", "200L", "300L", "400L", "500L"]),
   department: z.string().trim().min(2, "Enter your department").max(100),
+  faculty: z.string().trim().max(100).optional().or(z.literal("")),
   matric_no: z.string().trim().max(50).optional().or(z.literal("")),
 });
 
@@ -26,6 +27,7 @@ const Signup = () => {
     password: "",
     level: "100L" as "100L" | "200L" | "300L" | "400L" | "500L",
     department: "",
+    faculty: "",
     matric_no: "",
   });
   const [loading, setLoading] = useState(false);
@@ -38,49 +40,68 @@ const Signup = () => {
       return;
     }
     setLoading(true);
+
     const { data: signupData, error } = await supabase.auth.signUp({
       email: form.email.trim(),
       password: form.password,
       options: {
         emailRedirectTo: `https://fut-study-sanctuary.lovable.app/auth/callback`,
-        data: { full_name: form.full_name },
+        data: {
+          full_name: form.full_name,
+          level: form.level,
+          department: form.department,
+          faculty: form.faculty,
+          matric_no: form.matric_no,
+        },
       },
     });
+
     if (error) {
-      toast.error(error.message.includes("already") ? "Email already registered. Try logging in." : error.message);
+      toast.error(
+        error.message.includes("already")
+          ? "Email already registered. Try logging in."
+          : error.message
+      );
       setLoading(false);
       return;
     }
 
-    // With auto-confirm on, signUp returns a session immediately. If not, sign in explicitly.
-    if (!signupData.session) {
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
+    // Try to sign in immediately if session not returned
+    let userId = signupData?.user?.id;
+    if (!signupData?.session) {
+      const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
         email: form.email.trim(),
         password: form.password,
       });
       if (signInErr) {
-        toast.error("Account created. Please log in to continue.");
+        toast.success("Account created! Please check your email to verify, then log in.");
         setLoading(false);
         navigate("/login");
         return;
       }
+      userId = signInData?.user?.id;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.from("profiles").upsert({
-        id: user.id,
-        email: user.email ?? form.email.trim(),
+    // Save all profile details immediately
+    if (userId) {
+      const { error: profileError } = await supabase.from("profiles").upsert({
+        id: userId,
+        email: form.email.trim(),
         full_name: form.full_name,
-        level: form.level,
-        department: form.department,
+        level: form.level as any,
+        department: form.department || null,
+        faculty: form.faculty || null,
         matric_no: form.matric_no || null,
         updated_at: new Date().toISOString(),
       }, { onConflict: "id" });
+
+      if (profileError) {
+        console.error("Profile save error:", profileError);
+      }
     }
 
-    sessionStorage.setItem("signup_partial", "1");
     setLoading(false);
+    sessionStorage.setItem("signup_partial", "1");
     navigate("/signup/profile", { replace: true });
   };
 
@@ -98,23 +119,32 @@ const Signup = () => {
         <form onSubmit={submit} className="space-y-4">
           <Field label="Full name">
             <input
-              type="text" required value={form.full_name}
+              type="text"
+              required
+              value={form.full_name}
               onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-              className="input-base" placeholder="Your full name"
+              className="input-base"
+              placeholder="Your full name"
             />
           </Field>
           <Field label="Email">
             <input
-              type="email" required value={form.email}
+              type="email"
+              required
+              value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="input-base" placeholder="you@futminna.edu.ng"
+              className="input-base"
+              placeholder="you@futminna.edu.ng"
             />
           </Field>
           <Field label="Password">
             <PasswordInput
-              required value={form.password}
+              required
+              value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="input-base pr-11" placeholder="At least 6 characters" minLength={6}
+              className="input-base pr-11"
+              placeholder="At least 6 characters"
+              minLength={6}
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -124,27 +154,50 @@ const Signup = () => {
                 onChange={(e) => setForm({ ...form, level: e.target.value as typeof form.level })}
                 className="input-base"
               >
-                <option>100L</option><option>200L</option><option>300L</option><option>400L</option><option>500L</option>
+                <option>100L</option>
+                <option>200L</option>
+                <option>300L</option>
+                <option>400L</option>
+                <option>500L</option>
               </select>
             </Field>
             <Field label="Department">
               <input
-                type="text" required value={form.department}
+                type="text"
+                required
+                value={form.department}
                 onChange={(e) => setForm({ ...form, department: e.target.value })}
-                className="input-base" placeholder="Comp Sci"
+                className="input-base"
+                placeholder="Comp Sci"
               />
             </Field>
           </div>
+          <Field label="Faculty">
+            <input
+              type="text"
+              value={form.faculty}
+              onChange={(e) => setForm({ ...form, faculty: e.target.value })}
+              className="input-base"
+              placeholder="SIPET,SICT,SPS...."
+            />
+          </Field>
           <Field label="Matric number (optional)">
             <input
-              type="text" value={form.matric_no}
+              type="text"
+              value={form.matric_no}
               onChange={(e) => setForm({ ...form, matric_no: e.target.value })}
-              className="input-base" placeholder="2020/1/12345CS"
+              className="input-base"
+              placeholder="2020/1/12345CS"
             />
           </Field>
 
-          <Button type="submit" disabled={loading} size="lg" className="w-full bg-gradient-button border border-primary/40 text-primary h-12 rounded-xl font-semibold mt-2">
-            {loading ? "Creating…" : <>Continue <ArrowRight className="h-4 w-4 ml-2" /></>}
+          <Button
+            type="submit"
+            disabled={loading}
+            size="lg"
+            className="w-full bg-gradient-button border border-primary/40 text-primary h-12 rounded-xl font-semibold mt-2"
+          >
+            {loading ? "Creating…" : <><span>Continue</span> <ArrowRight className="h-4 w-4 ml-2" /></>}
           </Button>
         </form>
 
