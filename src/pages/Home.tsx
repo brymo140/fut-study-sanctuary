@@ -8,6 +8,7 @@ import { AnnouncementsSheet } from "@/components/AnnouncementsSheet";
 import { NotificationsSheet } from "@/components/NotificationsSheet";
 import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
 import { initPushNotifications } from "@/lib/pushNotifications";
+import { cacheData, getCachedData } from "@/lib/cache";
 
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
@@ -38,22 +39,35 @@ const Home = () => {
   }, [user?.id]);
 
   useEffect(() => {
+    const cacheKey = `home_${activeLevel}`;
+    const cached = getCachedData<{ t: PdfSummary[]; r: PdfSummary[]; c: YTChannel[] }>(cacheKey);
+    if (cached) {
+      setTrending(cached.t || []);
+      setRecent(cached.r || []);
+      setChannels(cached.c || []);
+    }
     const load = async () => {
-      const trendingQ = supabase.from("pdfs").select("*").order("download_count", { ascending: false }).limit(6);
-      const recentQ = supabase.from("pdfs").select("*").order("created_at", { ascending: false }).limit(10);
-      const chQ = supabase.from("youtube_channels").select("id,channel_name,channel_url,thumbnail_url,level").eq("is_active", true).order("created_at", { ascending: false }).limit(8);
+      try {
+        const trendingQ = supabase.from("pdfs").select("*").order("download_count", { ascending: false }).limit(6);
+        const recentQ = supabase.from("pdfs").select("*").order("created_at", { ascending: false }).limit(10);
+        const chQ = supabase.from("youtube_channels").select("id,channel_name,channel_url,thumbnail_url,level").eq("is_active", true).order("created_at", { ascending: false }).limit(8);
 
-      if (activeLevel !== "All") {
-        trendingQ.eq("level", activeLevel as "100L");
-        recentQ.eq("level", activeLevel as "100L");
+        if (activeLevel !== "All") {
+          trendingQ.eq("level", activeLevel as "100L");
+          recentQ.eq("level", activeLevel as "100L");
+        }
+
+        const [{ data: t }, { data: r }, { data: c }] = await Promise.all([trendingQ, recentQ, chQ]);
+        const tt = (t as PdfSummary[]) || [];
+        const rr = (r as PdfSummary[]) || [];
+        const cc = (c as YTChannel[]) || [];
+        setTrending(tt); setRecent(rr); setChannels(cc);
+        cacheData(cacheKey, { t: tt, r: rr, c: cc });
+      } catch (e) {
+        console.warn("home load failed", e);
       }
-
-      const [{ data: t }, { data: r }, { data: c }] = await Promise.all([trendingQ, recentQ, chQ]);
-      setTrending((t as PdfSummary[]) || []);
-      setRecent((r as PdfSummary[]) || []);
-      setChannels((c as YTChannel[]) || []);
     };
-    load();
+    if (navigator.onLine) load();
   }, [activeLevel]);
 
   // Compute unread count using notification_reads (per-user dismissals).
