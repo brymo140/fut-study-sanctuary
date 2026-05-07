@@ -88,7 +88,7 @@ const Profile = () => {
       </Button>
 
       <p className="text-center text-[11px] text-muted-foreground/70 pt-2">
-        🍯🐝 Designed &amp; Built by HIGHBEE
+         Designed &amp; Built by HIGHBEE 🍯🐝
       </p>
 
       <div className="h-4" />

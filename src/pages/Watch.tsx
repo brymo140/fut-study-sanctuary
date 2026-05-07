@@ -85,15 +85,10 @@ const Watch = () => {
     const query = q.trim();
     if (!query) { setResults(null); setSearchQuery(""); setSearchError(null); return; }
     if (!YT_API_KEY) {
-      setSearchError("YouTube search not configured. Add VITE_YOUTUBE_API_KEY to .env (Google Cloud Console > YouTube Data API v3).");
+      setSearchError("YouTube search not configured. Add VITE_YOUTUBE_API_KEY to .env");
       setResults([]);
       setSearchQuery(query);
       return;
-    if (pageError) return (
-      <div className="p-8 text-center text-muted-foreground">
-      <p>📺 {pageError}</p>
-      </div>
-      );
     }
     setSearching(true);
     setSearchError(null);
@@ -123,6 +118,11 @@ const Watch = () => {
 
   const showSearchResults = !!searchQuery;
 
+  if (pageError) return (
+    <div className="p-8 text-center text-muted-foreground">
+      <p>📺 {pageError}</p>
+    </div>
+  );
   return (
     <div className="space-y-5">
       <div>

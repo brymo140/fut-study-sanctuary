@@ -35,8 +35,12 @@ const Welcome = () => {
             All your course materials, past questions, and learning channels — in one place.
           </p>
 
-          <div className="mt-12 flex h-32 w-32 rounded-3xl bg-gradient-brand items-center justify-center shadow-glow">
-            <span className="text-5xl">📚</span>
+          <div className="mt-12 flex h-32 w-32 rounded-3xl overflow-hidden shadow-glow">
+          <img 
+              src="/app-icon.png" 
+              alt="HighVault" 
+              className="w-full h-full object-cover"
+            />
           </div>
         </div>
 
