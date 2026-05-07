@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Loader2, BookOpen } from "lucide-react";
@@ -18,24 +18,89 @@ interface Props {
  */
 export const PdfViewer = ({ open, onOpenChange, storagePath, title }: Props) => {
   const [url, setUrl] = useState<string | null>(null);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const failTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!open || !storagePath) { setUrl(null); return; }
-    if (storagePath.startsWith("data:") || storagePath.startsWith("http") || storagePath.startsWith("file:") || storagePath.startsWith("content:")) {
+    if (!open || !storagePath) {
+      setUrl(null);
+      setViewerUrl(null);
+      setError(null);
+      return;
+    }
+
+    setError(null);
+    setViewerUrl(null);
+    setLoading(true);
+
+    // Local/offline PDFs should be rendered directly (no Google viewer).
+    if (
+      storagePath.startsWith("data:") ||
+      storagePath.startsWith("http") ||
+      storagePath.startsWith("file:") ||
+      storagePath.startsWith("content:")
+    ) {
       setUrl(storagePath);
       setLoading(false);
       return;
     }
-    setLoading(true);
+
     supabase.storage
       .from("chapters")
       .createSignedUrl(storagePath, 60 * 60)
       .then(({ data }) => {
-        setUrl(data?.signedUrl ?? null);
+        const signedUrl = data?.signedUrl ?? null;
+        if (!signedUrl) {
+          setError("Could not load PDF. Please try again.");
+          setUrl(null);
+          setLoading(false);
+          return;
+        }
+
+        // Ensure we encode exactly once on the *raw* signed URL.
+        // If the signed URL is already URL-encoded, decode it first so that
+        // encodeURIComponent applies only once to the result.
+        let decoded = signedUrl;
+        try {
+          decoded = decodeURIComponent(signedUrl);
+        } catch {
+          // If decoding fails (malformed escapes), fall back to the original.
+        }
+
+        const constructedViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(
+          decoded
+        )}&embedded=true`;
+        console.log("[PdfViewer] viewerUrl:", constructedViewerUrl);
+
+        setUrl(null);
+        setViewerUrl(constructedViewerUrl);
+        setLoading(false);
+      })
+      .catch((e) => {
+        console.error("[PdfViewer] signed url failed", e);
+        setError("Could not load PDF. Please try again.");
+        setUrl(null);
+        setViewerUrl(null);
         setLoading(false);
       });
   }, [open, storagePath]);
+
+  useEffect(() => {
+    // If the Google Docs viewer never finishes loading, show a friendly fallback.
+    if (!open) return;
+    if (!viewerUrl) return;
+    if (failTimerRef.current) window.clearTimeout(failTimerRef.current);
+    failTimerRef.current = window.setTimeout(() => {
+      setError("Could not load PDF. Please try again.");
+      setViewerUrl(null);
+    }, 15_000);
+    return () => {
+      if (failTimerRef.current) window.clearTimeout(failTimerRef.current);
+      failTimerRef.current = null;
+    };
+  }, [open, viewerUrl]);
 
   // Block right-click / long-press save while the viewer is open.
   useEffect(() => {
@@ -70,19 +135,29 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, title }: Props) => 
           onContextMenu={(e) => e.preventDefault()}
           style={{ WebkitTouchCallout: "none" } as any}
         >
-          {loading || !url ? (
+          {loading || (!viewerUrl && !url) ? (
             <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin" />
+              {error ? (
+                <div className="px-6 text-center">
+                  <p className="text-sm text-destructive">{error}</p>
+                </div>
+              ) : (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              )}
             </div>
           ) : (
             <div className="relative w-full h-full overflow-hidden">
               <iframe
-                src={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`}
+                src={viewerUrl ?? url ?? undefined}
                 title={title || "PDF"}
                 className="w-full h-full pointer-events-none"
                 style={{ border: 0, display: "block" }}
                 sandbox="allow-scripts allow-same-origin"
                 onContextMenu={(e) => e.preventDefault()}
+                onLoad={() => {
+                  if (failTimerRef.current) window.clearTimeout(failTimerRef.current);
+                  failTimerRef.current = null;
+                }}
               />
               <div
                 className="absolute"

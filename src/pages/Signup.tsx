@@ -66,25 +66,16 @@ const Signup = () => {
       return;
     }
 
-    // Try to sign in immediately if session not returned
-    let userId = signupData?.user?.id;
-    if (!signupData?.session) {
-      const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-        email: form.email.trim(),
-        password: form.password,
-      });
-      if (signInErr) {
-        toast.success("Account created! Please check your email to verify, then log in.");
-        setLoading(false);
-        navigate("/login");
-        return;
-      }
-      userId = signInData?.user?.id;
+    const userId = signupData?.user?.id;
+    if (!userId) {
+      toast.error("Sign up succeeded but no user id was returned.");
+      setLoading(false);
+      return;
     }
 
-    // Save all profile details immediately
-    if (userId) {
-      const { error: profileError } = await supabase.from("profiles").upsert({
+    // Save profile details immediately (after user id is known).
+    const { error: profileError } = await supabase.from("profiles").upsert(
+      {
         id: userId,
         email: form.email.trim(),
         full_name: form.full_name,
@@ -93,16 +84,36 @@ const Signup = () => {
         faculty: form.faculty || null,
         matric_no: form.matric_no || null,
         updated_at: new Date().toISOString(),
-      }, { onConflict: "id" });
+      },
+      { onConflict: "id" }
+    );
 
-      if (profileError) {
-        console.error("Profile save error:", profileError);
-      }
+    if (profileError) {
+      console.error("Profile upsert error:", profileError);
+      toast.error(profileError.message || "Could not save your profile");
+      setLoading(false);
+      return;
+    }
+
+    // Verify upsert.
+    const { data: verifiedProfile, error: verifyErr } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
+    if (verifyErr) console.error("Profile verification select error:", verifyErr);
+    console.log("[Signup] Profile upsert verified:", verifiedProfile);
+
+    // Supabase may auto-confirm users and return a session immediately.
+    if (signupData?.session) {
+      toast.success("Welcome to HighVault 🎉");
+      navigate("/", { replace: true });
+    } else {
+      toast.success("Check your email to confirm your account.");
+      navigate("/login", { replace: true });
     }
 
     setLoading(false);
-    sessionStorage.setItem("signup_partial", "1");
-    navigate("/signup/profile", { replace: true });
   };
 
   return (

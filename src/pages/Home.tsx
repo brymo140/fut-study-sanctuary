@@ -9,7 +9,6 @@ import { NotificationsSheet } from "@/components/NotificationsSheet";
 import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
 import { initPushNotifications, maybeShowStudyReminder } from "@/lib/pushNotifications";
 import { cacheData, getCachedData } from "@/lib/cache";
-import { SplashLoader } from "@/components/SplashLoader";
 import { useOnline } from "@/hooks/useOnline";
 import { AdMobBannerSlot } from "@/components/ads/AdMobBannerSlot";
 
@@ -128,7 +127,15 @@ const Home = () => {
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
   const firstName = (profile?.full_name || profile?.email || "there").split(" ")[0];
 
-  if (loading) return <SplashLoader label="Loading Home..." />;
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <div className="surface-card p-4 animate-pulse" />
+        <div className="surface-card p-4 animate-pulse" />
+        <div className="surface-card p-4 animate-pulse" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -169,7 +176,7 @@ const Home = () => {
       </header>
 
       {/* Level pills */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4">
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
         {LEVELS.map((lvl) => (
           <button
             key={lvl}
@@ -185,7 +192,7 @@ const Home = () => {
         {trending.length === 0 ? (
           <EmptyHint text="No trending materials yet. Check back soon." />
         ) : (
-          <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide">
             {trending.map((p, i) => (
               <div key={p.id} className="relative">
                 {i === 0 && (
@@ -207,7 +214,7 @@ const Home = () => {
         {channels.length === 0 ? (
           <EmptyHint text="No channels yet. Admins can add them in /admin." />
         ) : (
-          <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide">
             {channels.map((c) => (
               <button
                 key={c.id} onClick={() => openYouTube(c.channel_url)} type="button"

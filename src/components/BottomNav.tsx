@@ -31,8 +31,8 @@ export const BottomNav = () => {
                 <NavLink
                   to={to}
                   data-onboarding={onboard || undefined}
-                  className={`flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors ${
-                    active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                  className={`min-h-[44px] flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-xl text-[10px] font-medium transition-colors ${
+                    active ? "text-primary bg-primary/15" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                   }`}
                 >
                   <Icon className="h-5 w-5" strokeWidth={active ? 2.5 : 2} />

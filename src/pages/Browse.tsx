@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Search, X, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
-import { SplashLoader } from "@/components/SplashLoader";
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 type Tab = "materials" | "past";
@@ -67,7 +66,18 @@ const Browse = () => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
   };
 
-  if (loading) return <SplashLoader label="Loading materials..." />;
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="surface-card p-4 animate-pulse" />
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="surface-card p-3 animate-pulse h-24" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -76,7 +86,7 @@ const Browse = () => {
         <button
           onClick={() => { setSearchOpen((v) => !v); if (searchOpen) setSearch(""); }}
           aria-label="Search"
-          className="h-9 w-9 rounded-full surface-card flex items-center justify-center hover:border-primary"
+          className="min-h-[44px] min-w-[44px] h-11 w-11 rounded-full surface-card flex items-center justify-center hover:border-primary"
         >
           {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4 text-primary" />}
         </button>
@@ -149,7 +159,7 @@ const Browse = () => {
             onClick={() => setTab(t.v as Tab)}
             className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${
               tab === t.v ? "bg-gradient-button text-primary border border-primary/40" : "text-muted-foreground"
-            }`}
+            } min-h-[44px]`}
           >
             {t.label}
           </button>

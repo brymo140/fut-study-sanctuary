@@ -17,9 +17,10 @@ const Profile = () => {
   const { profile, isAdmin, roleLabel, signOut, session } = useAuth();
   const navigate = useNavigate();
   const [freshProfile, setFreshProfile] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [theme, setTheme] = useState<Theme>((localStorage.getItem(THEME_KEY) as Theme) || "dark");
   const showAdminEntry = isAdmin || isHardcodedAdminEmail(session?.user?.email || profile?.email);
-  const profileData = freshProfile || profile;
+  const profileData = freshProfile;
 
   useEffect(() => {
     applyTheme(theme);
@@ -29,16 +30,25 @@ const Profile = () => {
     const loadFreshProfile = async () => {
       const uid = session?.user?.id;
       if (!uid) return;
+      setProfileLoading(true);
       const { data } = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle();
       setFreshProfile(data || null);
+      setProfileLoading(false);
     };
     loadFreshProfile();
+    const onFocus = () => loadFreshProfile();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [session?.user?.id]);
 
   const initials = (profileData?.full_name || profileData?.email || "U")
-    .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
+    .split(" ")
+    .map((s: string) => s[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
-  const xp = profileData?.xp || 0;
+  const xp = profileData?.xp ?? 0;
   const nextMilestone = Math.ceil((xp + 1) / 100) * 100;
   const pct = ((xp % 100) / 100) * 100;
 
@@ -52,7 +62,7 @@ const Profile = () => {
           ) : initials}
         </div>
         <h1 className="text-xl font-bold text-white">{profileData?.full_name || "Student"}</h1>
-        <p className="text-sm text-white/80 mt-0.5">{profileData?.email}</p>
+        <p className="text-sm text-white/80 mt-0.5">{profileData?.email || (profileLoading ? "Loading…" : "")}</p>
         <span
           className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
             isAdmin ? "bg-secondary/20 text-secondary" : roleLabel === "Class Rep" ? "bg-primary/20 text-primary" : "bg-white/15 text-white"
@@ -98,7 +108,7 @@ const Profile = () => {
       <Button
         onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
         variant="outline"
-        className="w-full bg-surface border-border"
+        className="w-full bg-surface border-border h-12"
       >
         {theme === "dark" ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
         {theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}

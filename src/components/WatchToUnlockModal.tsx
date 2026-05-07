@@ -35,6 +35,9 @@ export const WatchToUnlockModal = ({ open, chapterTitle, onClose, onUnlocked }: 
       const granted = await showRewardedAd();
       if (granted) {
         setPhase("unlocked");
+        // Save/open immediately after ad reward so the module button persists
+        // correctly after leaving and returning.
+        await Promise.resolve(onUnlocked());
       } else {
         toast.error("Watch the full ad to unlock");
         onClose();

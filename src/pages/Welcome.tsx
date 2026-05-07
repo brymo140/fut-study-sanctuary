@@ -37,9 +37,12 @@ const Welcome = () => {
 
           <div className="mt-12 flex h-32 w-32 rounded-3xl overflow-hidden shadow-glow">
           <img 
-              src="/app-icon.png" 
+              src="./app-icon.png" 
               alt="HighVault" 
               className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = "/placeholder.svg";
+              }}
             />
           </div>
         </div>

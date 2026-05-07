@@ -39,11 +39,24 @@ export const OnboardingGuide = () => {
 
   return (
     <div className="fixed inset-0 z-[70]">
-      <div className="absolute inset-0 bg-black/75" />
+      <div
+        className="absolute inset-0 backdrop-blur-sm"
+        style={{
+          background: rect
+            ? `radial-gradient(circle at ${rect.left + rect.width / 2}px ${rect.top + rect.height / 2}px, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 38%, rgba(0,0,0,0.72) 78%)`
+            : "rgba(0,0,0,0.55)",
+        }}
+      />
       {rect && (
         <div
-          className="absolute rounded-xl border-2 border-primary shadow-[0_0_0_9999px_rgba(0,0,0,0.75)] pointer-events-none"
-          style={{ left: rect.left - 8, top: rect.top - 8, width: rect.width + 16, height: rect.height + 16 }}
+          className="absolute rounded-xl border-2 border-primary/70 pointer-events-none"
+          style={{
+            left: rect.left - 10,
+            top: rect.top - 10,
+            width: rect.width + 20,
+            height: rect.height + 20,
+            boxShadow: "0 0 0 6px rgba(59,139,245,0.12), 0 0 30px rgba(59,139,245,0.25)",
+          }}
         />
       )}
       <button onClick={finish} className="absolute top-5 right-5 text-xs text-white/90">Skip</button>

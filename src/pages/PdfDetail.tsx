@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { isModuleUnlocked, markModuleUnlocked } from "@/lib/sessionUnlocks";
 import { savePdfToDevice, readPdfFromDevice } from "@/lib/deviceFiles";
 
+const DL_PREFIX = "hv_dl_";
+
 interface Pdf {
   id: string; title: string; course_code: string; level: string;
   faculty: string | null; department: string | null; description: string | null;
@@ -40,20 +42,55 @@ const PdfDetail = () => {
   // Tick to re-render when the in-memory unlock set changes.
   const [, setTick] = useState(0);
 
+  const fileNameForChapter = (ch: Chapter) =>
+    `${pdf?.course_code || "HV"}-M${ch.chapter_number}-${ch.title}.pdf`;
+
   const load = async () => {
     if (!id || !user) return;
-    const [{ data: p }, { data: ch }, { data: bm }, { data: rt }, { data: dls }] = await Promise.all([
+    setLoading(true);
+
+    const [{ data: p }, { data: ch }, { data: bm }, { data: rt }] = await Promise.all([
       supabase.from("pdfs").select("*").eq("id", id).maybeSingle(),
       supabase.from("chapters").select("*").eq("pdf_id", id).order("chapter_number"),
       supabase.from("bookmarks").select("id").eq("user_id", user.id).eq("pdf_id", id).maybeSingle(),
       supabase.from("ratings").select("*").eq("pdf_id", id).order("created_at", { ascending: false }).limit(3),
-      supabase.from("downloads").select("chapter_id").eq("user_id", user.id).eq("pdf_id", id),
     ]);
+
+    const chapters = ((ch as Chapter[]) || []) as Chapter[];
     setPdf(p as Pdf | null);
-    setChapters((ch as Chapter[]) || []);
+    setChapters(chapters);
     setBookmarked(!!bm);
     setRatings((rt as Rating[]) || []);
-    setDownloadedChapterIds(new Set(((dls as any[]) || []).map((d) => d.chapter_id).filter(Boolean)));
+
+    // 1) LocalStorage first (fast): if hv_dl_<chapterId> exists, treat as downloaded.
+    const localDownloaded = new Set<string>();
+    for (const c of chapters) {
+      if (localStorage.getItem(`${DL_PREFIX}${c.id}`)) localDownloaded.add(c.id);
+    }
+    setDownloadedChapterIds(localDownloaded);
+
+    // 2) Then reconcile with Supabase: fetch *all* downloads for this user,
+    // and match by chapter_id against the chapters in this PDF.
+    try {
+      const { data: dlsAll } = await supabase
+        .from("downloads")
+        .select("chapter_id")
+        .eq("user_id", user.id);
+
+      const dlIds = new Set(
+        (((dlsAll as any[]) || []).map((d) => d.chapter_id) || []).filter(Boolean)
+      );
+      const currentChapterIds = new Set(chapters.map((c) => c.id));
+      const merged = new Set<string>();
+      for (const cid of dlIds) {
+        if (currentChapterIds.has(cid)) merged.add(cid);
+      }
+      for (const cid of localDownloaded) merged.add(cid);
+      setDownloadedChapterIds(merged);
+    } catch (e) {
+      console.error("[PdfDetail] download reconcile failed", e);
+    }
+
     const mine = ((rt as Rating[]) || []).find((r) => r.user_id === user.id);
     setMyStars(mine?.stars || 0);
     setReviewText(mine?.review_text || "");
@@ -92,20 +129,47 @@ const PdfDetail = () => {
     setUnlockChapter(null);
     markModuleUnlocked(ch.id);
     setTick((t) => t + 1);
-    const fileName = `${pdf?.course_code || "HV"}-M${ch.chapter_number}-${ch.title}.pdf`;
+
+    const fileName = fileNameForChapter(ch);
     const { data } = supabase.storage.from("chapters").getPublicUrl(ch.storage_path);
     const localUri = await savePdfToDevice(data.publicUrl, fileName);
-    await supabase.from("downloads").insert({ user_id: user.id, chapter_id: ch.id, pdf_id: id });
+
+    // Backup: store local file identifier so we can render quickly later.
+    localStorage.setItem(`${DL_PREFIX}${ch.id}`, fileName);
+
+    // Persist download state (for cross-device / refresh correctness).
+    const { error: dlErr } = await supabase.from("downloads").insert({
+      user_id: user.id,
+      chapter_id: ch.id,
+      pdf_id: id,
+      downloaded_at: new Date().toISOString(),
+    });
+    if (dlErr) {
+      console.error("[PdfDetail] downloads insert failed; retrying without downloaded_at", dlErr);
+      await supabase.from("downloads").insert({
+        user_id: user.id,
+        chapter_id: ch.id,
+        pdf_id: id,
+      });
+    }
+
     const { data: prof } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
     await supabase.from("profiles").update({ xp: (prof?.xp || 0) + 10 }).eq("id", user.id);
     refreshProfile();
+
+    // Open the locally cached PDF (no Google viewer).
     setDownloadedChapterIds((prev) => new Set([...prev, ch.id]));
-    setViewChapter({ ...ch, storage_path: localUri });
+    const localDataUrl = await readPdfFromDevice(fileName);
+    if (localDataUrl) {
+      setViewChapter({ ...ch, storage_path: localDataUrl });
+    } else {
+      setViewChapter(ch);
+    }
     toast.success("Saved to your library");
   };
   const openRead = async (ch: Chapter) => {
-    const fileName = `${pdf?.course_code || "HV"}-M${ch.chapter_number}-${ch.title}.pdf`;
-    const local = await readPdfFromDevice(fileName);
+    const cachedFileName = localStorage.getItem(`${DL_PREFIX}${ch.id}`) || fileNameForChapter(ch);
+    const local = await readPdfFromDevice(cachedFileName);
     if (local) {
       setViewChapter({ ...ch, storage_path: local });
       return;

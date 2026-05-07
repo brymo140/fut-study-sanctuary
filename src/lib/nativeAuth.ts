@@ -18,12 +18,16 @@ export const isNative = () => Capacitor.isNativePlatform();
  */
 export const signInWithGoogleSmart = async (webRedirect: string) => {
   if (!isNative()) {
-    return supabase.auth.signInWithOAuth("google", {
+    // Supabase expects provider in an object; passing positional args can lead
+    // to `provider undefined` runtime errors.
+    return supabase.auth.signInWithOAuth({
+      provider: "google",
       options: { redirectTo: webRedirect },
     });
   }
 
-  const result = await supabase.auth.signInWithOAuth("google", {
+  const result = await supabase.auth.signInWithOAuth({
+    provider: "google",
     options: {
       redirectTo: NATIVE_OAUTH_REDIRECT,
       skipBrowserRedirect: true,

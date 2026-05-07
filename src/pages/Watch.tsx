@@ -48,10 +48,12 @@ const Watch = () => {
       let chQ = supabase
         .from("youtube_channels")
         .select("*")
-        .eq("is_active", true)
+        // Some records may have null; treat it as active.
+        .or("is_active.eq.true,is_active.is.null")
         .order("created_at", { ascending: false });
       if (level !== "All") chQ = chQ.eq("level", level as any);
       const { data: ch, error: chError } = await chQ;
+      console.log("[Watch] channels query returned:", ch);
       if (chError) {
         console.error("Channels error:", chError);
         setChannels([]);

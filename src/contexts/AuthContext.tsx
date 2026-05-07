@@ -78,7 +78,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       profileData.is_banned = false;
     }
 
-    setProfile(profileData as Profile | null);
+    // Normalize nullable numeric fields coming from DB.
+    const normalizedProfile = profileData
+      ? ({
+          ...(profileData as any),
+          xp: profileData.xp ?? 0,
+          streak: profileData.streak ?? 0,
+        } as Profile)
+      : null;
+
+    setProfile(normalizedProfile);
     let admin = !!roles?.some((r) => r.role === "admin");
     const rep = !!roles?.some((r) => r.role === "rep");
 
@@ -103,17 +112,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setRoleLoading(false);
 
     // Update streak / last_active
-    if (profileData) {
+    if (normalizedProfile) {
       const today = new Date().toISOString().slice(0, 10);
-      const last = profileData.last_active;
+      const last = normalizedProfile.last_active;
       if (last !== today) {
         const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-        const newStreak = last === yesterday ? (profileData.streak || 0) + 1 : 1;
+        const newStreak = last === yesterday ? (normalizedProfile.streak || 0) + 1 : 1;
         await withSchemaRetry(async () => await supabase
           .from("profiles")
           .update({ last_active: today, streak: newStreak })
           .eq("id", uid));
-        setProfile({ ...profileData, last_active: today, streak: newStreak } as Profile);
+        setProfile({ ...normalizedProfile, last_active: today, streak: newStreak } as Profile);
       }
     }
   };

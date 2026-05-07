@@ -26,6 +26,7 @@ interface SubjectGroup {
 interface Bookmarked { id: string; title: string; course_code: string; level: string; }
 
 const LOCAL_PATHS_KEY = "hv_local_pdf_paths";
+const DL_PREFIX = "hv_dl_";
 const loadLocalPaths = (): Record<string, string> => {
   try { return JSON.parse(localStorage.getItem(LOCAL_PATHS_KEY) || "{}"); } catch { return {}; }
 };
@@ -72,7 +73,12 @@ const Downloads = () => {
     const result: SubjectGroup[] = subjects.map((s) => ({
       subject: s,
       chapters: chapters.filter((c: any) => c.pdf_id === s.id),
-      downloadedChapterIds: new Set(chapters.filter((c: any) => c.pdf_id === s.id && (downloadedIds.has(c.id) || downloadedPdfIds.has(s.id))).map((c) => c.id)),
+      downloadedChapterIds: new Set(
+        chapters
+          .filter((c: any) => c.pdf_id === s.id)
+          .map((c: any) => c.id)
+          .filter((cid: string) => downloadedIds.has(cid) || !!localStorage.getItem(`${DL_PREFIX}${cid}`))
+      ),
       localPaths,
     }));
     setGroups(result);
@@ -101,9 +107,24 @@ const Downloads = () => {
     setDownloading(ch.id);
     try {
       const { data } = supabase.storage.from("chapters").getPublicUrl(ch.storage_path);
-      const uri = await savePdfToDevice(data.publicUrl, `${subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`);
+      const fileName = `${subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`;
+      const uri = await savePdfToDevice(data.publicUrl, fileName);
+      localStorage.setItem(`${DL_PREFIX}${ch.id}`, fileName);
       saveLocalPath(ch.id, uri);
-      await supabase.from("downloads").insert({ user_id: user.id, chapter_id: ch.id, pdf_id: subject.id });
+      const { error: dlErr } = await supabase.from("downloads").insert({
+        user_id: user.id,
+        chapter_id: ch.id,
+        pdf_id: subject.id,
+        downloaded_at: new Date().toISOString(),
+      });
+      if (dlErr) {
+        console.error("[Downloads] downloads insert failed; retrying without downloaded_at", dlErr);
+        await supabase.from("downloads").insert({
+          user_id: user.id,
+          chapter_id: ch.id,
+          pdf_id: subject.id,
+        });
+      }
       markModuleUnlocked(ch.id);
       toast.success("✅ Saved to your library!");
       setConfetti(true);
@@ -119,7 +140,8 @@ const Downloads = () => {
 
   const openModule = async (g: SubjectGroup, ch: Chapter) => {
     // Try local first (no ad)
-    const local = await readPdfFromDevice(`${g.subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`);
+    const storedName = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
+    const local = await readPdfFromDevice(storedName || `${g.subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`);
     if (local) {
       setView({ ch, subject: g.subject, storagePath: local });
       return;
