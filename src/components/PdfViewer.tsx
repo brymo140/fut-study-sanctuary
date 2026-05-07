@@ -22,6 +22,11 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, title }: Props) => 
 
   useEffect(() => {
     if (!open || !storagePath) { setUrl(null); return; }
+    if (storagePath.startsWith("data:") || storagePath.startsWith("http") || storagePath.startsWith("file:") || storagePath.startsWith("content:")) {
+      setUrl(storagePath);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     supabase.storage
       .from("chapters")
@@ -70,14 +75,20 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, title }: Props) => 
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
           ) : (
-            <iframe
-              src={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`}
-              title={title || "PDF"}
-              className="w-full h-full"
-              style={{ border: 0, display: 'block' }}
-              sandbox="allow-scripts allow-same-origin"
-              onContextMenu={(e) => e.preventDefault()}
-            />
+            <div className="relative w-full h-full overflow-hidden">
+              <iframe
+                src={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`}
+                title={title || "PDF"}
+                className="w-full h-full pointer-events-none"
+                style={{ border: 0, display: "block" }}
+                sandbox="allow-scripts allow-same-origin"
+                onContextMenu={(e) => e.preventDefault()}
+              />
+              <div
+                className="absolute"
+                style={{ top: 0, right: 0, width: "56px", height: "56px", background: "black", zIndex: 999 }}
+              />
+            </div>
           )}
         </div>
       </DialogContent>

@@ -79,8 +79,19 @@
     --sidebar-ring: 214 90% 60%;
   }
 
-  /* Force dark theme always — this app has no light mode */
+  :root.light {
+    --background: 0 0% 100%;
+    --foreground: 240 30% 6%;
+    --surface: 0 0% 100%;
+    --surface-elevated: 220 20% 97%;
+    --border: 220 18% 88%;
+    --input: 220 18% 88%;
+    --muted: 220 14% 95%;
+    --muted-foreground: 222 12% 40%;
+  }
+
   html { color-scheme: dark; }
+  html.light { color-scheme: light; }
 }
 
 @layer base {
@@ -104,6 +115,10 @@
       linear-gradient(90deg, rgba(59, 139, 245, 0.03) 1px, transparent 1px);
     background-size: 20px 20px;
     background-attachment: fixed;
+  }
+
+  html, body, #root, * {
+    transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
   }
 
   ::selection {
@@ -196,4 +211,15 @@
   }
   .typing-dot:nth-child(2) { animation-delay: 0.15s; }
   .typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    20% { transform: scale(1.08); }
+    40% { transform: scale(1); }
+    60% { transform: scale(1.08); }
+    80% { transform: scale(1); }
+  }
+  .animate-heartbeat {
+    animation: heartbeat 1.8s ease-in-out infinite;
+  }
 }

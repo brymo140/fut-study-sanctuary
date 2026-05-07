@@ -1,8 +1,25 @@
 {
     "logs": [
         {
-            "outputFile": "com.highvault.futminna.app-mergeDebugResources-41:/values-hy/values-hy.xml",
+            "outputFile": "com.highvault.futminna.app-mergeDebugResources-40:/values-hy/values-hy.xml",
             "map": [
+                {
+                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\502158fab57e8726b7f2876f677a6e3b\\transformed\\play-services-base-18.0.0\\res\\values-hy\\values.xml",
+                    "from": {
+                        "startLines": "4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
+                        "startColumns": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+                        "startOffsets": "193,295,456,586,690,840,972,1095,1204,1367,1471,1635,1767,1925,2087,2148,2211",
+                        "endColumns": "101,160,129,103,149,131,122,108,162,103,163,131,157,161,60,62,77",
+                        "endOffsets": "294,455,585,689,839,971,1094,1203,1366,1470,1634,1766,1924,2086,2147,2210,2288"
+                    },
+                    "to": {
+                        "startLines": "36,37,38,39,40,41,42,43,45,46,47,48,49,50,51,52,53",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "3534,3640,3805,3939,4047,4201,4337,4464,4728,4895,5003,5171,5307,5469,5635,5700,5767",
+                        "endColumns": "105,164,133,107,153,135,126,112,166,107,167,135,161,165,64,66,81",
+                        "endOffsets": "3635,3800,3934,4042,4196,4332,4459,4572,4890,4998,5166,5302,5464,5630,5695,5762,5844"
+                    }
+                },
                 {
                     "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\2d58e25df94a3d638cead9f8942fb04d\\transformed\\play-services-basement-18.9.0\\res\\values-hy\\values.xml",
                     "from": {
@@ -21,20 +38,20 @@
                     }
                 },
                 {
-                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\4aef5d6dbfa2eab3e0cf75d9b9b7eb7a\\transformed\\play-services-base-18.1.0\\res\\values-hy\\values.xml",
+                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\af275dfc04c426ecf23b79de71c76bf1\\transformed\\browser-1.9.0\\res\\values-hy\\values-hy.xml",
                     "from": {
-                        "startLines": "4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
-                        "startColumns": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-                        "startOffsets": "193,295,456,586,690,840,972,1095,1204,1367,1471,1635,1767,1925,2087,2148,2211",
-                        "endColumns": "101,160,129,103,149,131,122,108,162,103,163,131,157,161,60,62,77",
-                        "endOffsets": "294,455,585,689,839,971,1094,1203,1366,1470,1634,1766,1924,2086,2147,2210,2288"
+                        "startLines": "2,3,4,5",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,159,262,373",
+                        "endColumns": "103,102,110,102",
+                        "endOffsets": "154,257,368,471"
                     },
                     "to": {
-                        "startLines": "36,37,38,39,40,41,42,43,45,46,47,48,49,50,51,52,53",
-                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
-                        "startOffsets": "3534,3640,3805,3939,4047,4201,4337,4464,4728,4895,5003,5171,5307,5469,5635,5700,5767",
-                        "endColumns": "105,164,133,107,153,135,126,112,166,107,167,135,161,165,64,66,81",
-                        "endOffsets": "3635,3800,3934,4042,4196,4332,4459,4572,4890,4998,5166,5302,5464,5630,5695,5762,5844"
+                        "startLines": "54,55,56,57",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "5849,5953,6056,6167",
+                        "endColumns": "103,102,110,102",
+                        "endOffsets": "5948,6051,6162,6265"
                     }
                 },
                 {
@@ -86,23 +103,6 @@
                         "startOffsets": "6270,6325,6378,6435,6507,6580,6692,6762,6944,7063,7183,7239,7311,7413,7511,7556,7638,7678,7716,7776,7858,8091",
                         "endColumns": "54,52,56,71,72,111,69,181,118,119,55,71,101,97,44,81,39,37,59,81,48,59",
                         "endOffsets": "6320,6373,6430,6502,6575,6687,6757,6939,7058,7178,7234,7306,7408,7506,7551,7633,7673,7711,7771,7853,7902,8146"
-                    }
-                },
-                {
-                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\6ff3ddb4fe8a0a63339430bc9386266d\\transformed\\browser-1.8.0\\res\\values-hy\\values-hy.xml",
-                    "from": {
-                        "startLines": "2,3,4,5",
-                        "startColumns": "4,4,4,4",
-                        "startOffsets": "55,159,262,373",
-                        "endColumns": "103,102,110,102",
-                        "endOffsets": "154,257,368,471"
-                    },
-                    "to": {
-                        "startLines": "54,55,56,57",
-                        "startColumns": "4,4,4,4",
-                        "startOffsets": "5849,5953,6056,6167",
-                        "endColumns": "103,102,110,102",
-                        "endOffsets": "5948,6051,6162,6265"
                     }
                 }
             ]

@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "com.highvault.futminna.app-mergeDebugResources-41:/values-zh-rHK/values-zh-rHK.xml",
+            "outputFile": "com.highvault.futminna.app-mergeDebugResources-40:/values-zh-rHK/values-zh-rHK.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\4aef5d6dbfa2eab3e0cf75d9b9b7eb7a\\transformed\\play-services-base-18.1.0\\res\\values-zh-rHK\\values.xml",
+                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\502158fab57e8726b7f2876f677a6e3b\\transformed\\play-services-base-18.0.0\\res\\values-zh-rHK\\values.xml",
                     "from": {
                         "startLines": "4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
                         "startColumns": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
@@ -35,23 +35,6 @@
                         "startOffsets": "4191",
                         "endColumns": "107",
                         "endOffsets": "4294"
-                    }
-                },
-                {
-                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\6ff3ddb4fe8a0a63339430bc9386266d\\transformed\\browser-1.8.0\\res\\values-zh-rHK\\values-zh-rHK.xml",
-                    "from": {
-                        "startLines": "2,3,4,5",
-                        "startColumns": "4,4,4,4",
-                        "startOffsets": "55,138,230,331",
-                        "endColumns": "82,91,100,92",
-                        "endOffsets": "133,225,326,419"
-                    },
-                    "to": {
-                        "startLines": "54,55,56,57",
-                        "startColumns": "4,4,4,4",
-                        "startOffsets": "5153,5236,5328,5429",
-                        "endColumns": "82,91,100,92",
-                        "endOffsets": "5231,5323,5424,5517"
                     }
                 },
                 {
@@ -103,6 +86,23 @@
                         "startOffsets": "105,200,293,393,475,572,680,757,832,924,1018,1109,1205,1300,1394,1490,1582,1674,1766,1844,1940,2035,2130,2227,2323,2421,2572,6690",
                         "endColumns": "94,92,99,81,96,107,76,74,91,93,90,95,94,93,95,91,91,91,77,95,94,94,96,95,97,150,93,78",
                         "endOffsets": "195,288,388,470,567,675,752,827,919,1013,1104,1200,1295,1389,1485,1577,1669,1761,1839,1935,2030,2125,2222,2318,2416,2567,2661,6764"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\af275dfc04c426ecf23b79de71c76bf1\\transformed\\browser-1.9.0\\res\\values-zh-rHK\\values-zh-rHK.xml",
+                    "from": {
+                        "startLines": "2,3,4,5",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,138,230,331",
+                        "endColumns": "82,91,100,92",
+                        "endOffsets": "133,225,326,419"
+                    },
+                    "to": {
+                        "startLines": "54,55,56,57",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "5153,5236,5328,5429",
+                        "endColumns": "82,91,100,92",
+                        "endOffsets": "5231,5323,5424,5517"
                     }
                 }
             ]

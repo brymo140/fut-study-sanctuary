@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,6 +11,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { MaintenanceGate } from "@/components/MaintenanceGate";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { SplashLoader } from "@/components/SplashLoader";
 
 import Welcome from "./pages/Welcome";
 import Signup from "./pages/Signup";
@@ -28,6 +30,7 @@ import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+const THEME_KEY = "hv_theme";
 
 const Protected = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute>
@@ -37,7 +40,21 @@ const Protected = ({ children }: { children: React.ReactNode }) => (
   </ProtectedRoute>
 );
 
-const App = () => (
+const App = () => {
+  const [booting, setBooting] = useState(true);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    document.documentElement.classList.toggle("light", savedTheme === "light");
+    const t = window.setTimeout(() => setBooting(false), 400);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  if (booting) {
+    return <SplashLoader label="Starting HighVault..." />;
+  }
+
+  return (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -73,6 +90,7 @@ const App = () => (
       </TooltipProvider>
     </QueryClientProvider>
   </ErrorBoundary>
-);
+  );
+};
 
 export default App;

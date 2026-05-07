@@ -16,7 +16,7 @@ type Msg = {
   text?: string;
 };
 
-const STREAM_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-tutor`;
+const STREAM_URL = "https://dcikanpfsgzxufjlkngd.supabase.co/functions/v1/ai-tutor";
 const FOLLOWUPS_RE = /\[\[FOLLOWUPS:\s*([^\]]+?)\]\]\s*$/i;
 
 const splitFollowups = (raw: string): { text: string; chips: string[] } => {
@@ -113,6 +113,8 @@ export const AITutor = () => {
     };
 
     try {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 10_000);
       const resp = await fetch(STREAM_URL, {
         method: "POST",
         headers: {
@@ -120,11 +122,28 @@ export const AITutor = () => {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({ messages: apiMessages }),
+        signal: controller.signal,
       });
+      window.clearTimeout(timeout);
 
-      if (resp.status === 429) { upsert("⚠️ The AI tutor is busy. Try again in a moment."); return; }
-      if (resp.status === 402) { upsert("⚠️ AI credits are exhausted."); return; }
-      if (!resp.ok || !resp.body) { upsert("Sorry — couldn't reach the tutor right now."); return; }
+      if (resp.status === 429) {
+        const textBody = await resp.text();
+        console.error("AI tutor 429:", textBody);
+        upsert(textBody || "⚠️ The AI tutor is busy. Try again in a moment.");
+        return;
+      }
+      if (resp.status === 402) {
+        const textBody = await resp.text();
+        console.error("AI tutor 402:", textBody);
+        upsert(textBody || "⚠️ AI credits are exhausted.");
+        return;
+      }
+      if (!resp.ok || !resp.body) {
+        const textBody = await resp.text();
+        console.error("AI tutor non-ok response:", resp.status, textBody);
+        upsert(textBody || "Sorry — couldn't reach the tutor right now.");
+        return;
+      }
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
@@ -146,15 +165,20 @@ export const AITutor = () => {
             const parsed = JSON.parse(json);
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) upsert(content);
-          } catch {
+          } catch (parseErr) {
+            console.error("AI tutor stream parse error:", parseErr, line);
             buffer = line + "\n" + buffer;
             break;
           }
         }
       }
     } catch (e) {
-      console.error(e);
-      upsert("Sorry — something went wrong.");
+      console.error("AI tutor request failed:", e);
+      if (e instanceof Error && e.name === "AbortError") {
+        upsert("Request timed out after 10 seconds. Please try again.");
+      } else {
+        upsert(e instanceof Error ? e.message : "Sorry — something went wrong.");
+      }
     } finally {
       setLoading(false);
     }
@@ -164,6 +188,7 @@ export const AITutor = () => {
     <>
       <button
         onClick={() => setOpen(true)}
+        data-onboarding="ai-tutor"
         aria-label="Open AI study assistant"
         style={{ bottom: "calc(var(--bottom-chrome) + 12px)" }}
         className="fixed right-4 z-40 h-14 w-14 rounded-full bg-gradient-brand shadow-glow flex items-center justify-center transition-transform hover:scale-110 animate-pulse-glow"

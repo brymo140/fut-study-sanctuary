@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
-import { lovable } from "@/integrations/lovable";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Custom URL scheme used as the OAuth deep-link redirect on native.
@@ -18,19 +18,19 @@ export const isNative = () => Capacitor.isNativePlatform();
  */
 export const signInWithGoogleSmart = async (webRedirect: string) => {
   if (!isNative()) {
-    return lovable.auth.signInWithOAuth("google", { redirect_uri: webRedirect });
+    return supabase.auth.signInWithOAuth("google", {
+      options: { redirectTo: webRedirect },
+    });
   }
 
-  // Native flow: get the provider URL but DO NOT redirect the webview.
-  const result = await lovable.auth.signInWithOAuth("google", {
-    redirect_uri: NATIVE_OAUTH_REDIRECT,
-    // @ts-expect-error – passthrough; managed Lovable shim accepts extras.
-    skipBrowserRedirect: true,
+  const result = await supabase.auth.signInWithOAuth("google", {
+    options: {
+      redirectTo: NATIVE_OAUTH_REDIRECT,
+      skipBrowserRedirect: true,
+    },
   });
 
-  // If the shim still returns a URL, open it in the system browser.
-  // @ts-expect-error – url may be present on native shim
-  const url: string | undefined = result?.url || result?.data?.url;
+  const url: string | undefined = result?.data?.url;
   if (url) {
     await Browser.open({ url, presentationStyle: "popover" });
   }

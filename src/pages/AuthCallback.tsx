@@ -8,6 +8,7 @@ import { CheckCircle2, Loader2 } from "lucide-react";
 const AuthCallback = () => {
   const navigate = useNavigate();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
+  const [flow, setFlow] = useState<"oauth" | "email">("oauth");
 
   useEffect(() => {
     const handle = async () => {
@@ -23,7 +24,10 @@ const AuthCallback = () => {
 
         const access_token = hashParams.get("access_token") || queryParams.get("access_token");
         const refresh_token = hashParams.get("refresh_token") || queryParams.get("refresh_token");
-        const code = queryParams.get("code");
+        const code = queryParams.get("code") || hashParams.get("code");
+        const type = queryParams.get("type") || hashParams.get("type");
+        const isEmailVerification = type === "signup" || type === "email" || type === "email_change";
+        setFlow(isEmailVerification ? "email" : "oauth");
 
         if (access_token && refresh_token) {
           const { error } = await supabase.auth.setSession({ access_token, refresh_token });
@@ -61,14 +65,16 @@ const AuthCallback = () => {
             <div className="h-16 w-16 rounded-full bg-success/15 flex items-center justify-center animate-in zoom-in duration-300">
               <CheckCircle2 className="h-10 w-10 text-success" />
             </div>
-            <h1 className="text-xl font-bold">Email confirmed! 🎉</h1>
-            <p className="text-sm text-muted-foreground">Welcome to HighVault. You're all set.</p>
+            <h1 className="text-xl font-bold">Email Verified! 🎉</h1>
+            <p className="text-sm text-muted-foreground">
+              {flow === "email" ? "Welcome to HighVault. Your email is now confirmed." : "Sign-in complete."}
+            </p>
             <Button
-              onClick={() => navigate("/", { replace: true })}
+              onClick={() => navigate(flow === "email" ? "/login" : "/", { replace: true })}
               size="lg"
               className="w-full bg-gradient-button border border-primary/40 text-primary h-12 rounded-xl font-semibold"
             >
-              Continue to app
+              {flow === "email" ? "Continue to Login →" : "Continue to app"}
             </Button>
           </>
         )}

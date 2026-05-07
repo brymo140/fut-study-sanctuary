@@ -16,13 +16,17 @@ export const registerNativeAuthDeepLinks = (onSignedIn: () => void) => {
     try {
       if (!url || !url.includes("auth/callback")) return;
 
-      // Extract tokens from either query string or hash fragment.
-      const u = new URL(url.replace("#", "?"));
-      const access_token = u.searchParams.get("access_token");
-      const refresh_token = u.searchParams.get("refresh_token");
+      const parsed = new URL(url);
+      const hash = parsed.hash.startsWith("#") ? parsed.hash.slice(1) : parsed.hash;
+      const hashParams = new URLSearchParams(hash);
+      const access_token = parsed.searchParams.get("access_token") || hashParams.get("access_token");
+      const refresh_token = parsed.searchParams.get("refresh_token") || hashParams.get("refresh_token");
+      const code = parsed.searchParams.get("code") || hashParams.get("code");
 
       if (access_token && refresh_token) {
         await supabase.auth.setSession({ access_token, refresh_token });
+      } else if (code) {
+        await supabase.auth.exchangeCodeForSession(code);
       }
 
       try { await Browser.close(); } catch { /* noop */ }

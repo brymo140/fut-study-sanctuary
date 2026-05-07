@@ -5,8 +5,6 @@
 type Listener = () => void;
 
 const REWARDED_DOWNLOAD_COOLDOWN_MS = 5 * 60 * 1000;
-const MIN_INTERSTITIAL_INTERVAL_MS = 30 * 60 * 1000;
-const MAX_INTERSTITIAL_INTERVAL_MS = 40 * 60 * 1000;
 
 const AUTH_PATH_PREFIXES = ["/welcome", "/signup", "/login", "/forgot-password", "/reset-password"];
 
@@ -28,10 +26,7 @@ class AdSessionManagerImpl {
   }
 
   private randomInterval() {
-    return Math.floor(
-      MIN_INTERSTITIAL_INTERVAL_MS +
-        Math.random() * (MAX_INTERSTITIAL_INTERVAL_MS - MIN_INTERSTITIAL_INTERVAL_MS)
-    );
+    return Math.floor(Math.random() * 20 + 10) * 60 * 1000;
   }
 
   subscribe(fn: Listener) { this.listeners.add(fn); return () => this.listeners.delete(fn); }

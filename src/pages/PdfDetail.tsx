@@ -8,6 +8,7 @@ import { WatchToUnlockModal } from "@/components/WatchToUnlockModal";
 import { PdfViewer } from "@/components/PdfViewer";
 import { toast } from "sonner";
 import { isModuleUnlocked, markModuleUnlocked } from "@/lib/sessionUnlocks";
+import { savePdfToDevice, readPdfFromDevice } from "@/lib/deviceFiles";
 
 interface Pdf {
   id: string; title: string; course_code: string; level: string;
@@ -17,6 +18,7 @@ interface Pdf {
 }
 interface Chapter { id: string; chapter_number: number; title: string; storage_path: string; file_size_mb: number | null; }
 interface Rating { id: string; stars: number; review_text: string | null; user_id: string; created_at: string; }
+interface ReviewUser { id: string; full_name: string | null; }
 
 const PdfDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -27,24 +29,43 @@ const PdfDetail = () => {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [bookmarked, setBookmarked] = useState(false);
   const [ratings, setRatings] = useState<Rating[]>([]);
+  const [reviewUsers, setReviewUsers] = useState<Record<string, string>>({});
+  const [myStars, setMyStars] = useState(0);
+  const [hoverStars, setHoverStars] = useState(0);
+  const [reviewText, setReviewText] = useState("");
   const [unlockChapter, setUnlockChapter] = useState<Chapter | null>(null);
   const [viewChapter, setViewChapter] = useState<Chapter | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloadedChapterIds, setDownloadedChapterIds] = useState<Set<string>>(new Set());
   // Tick to re-render when the in-memory unlock set changes.
   const [, setTick] = useState(0);
 
   const load = async () => {
     if (!id || !user) return;
-    const [{ data: p }, { data: ch }, { data: bm }, { data: rt }] = await Promise.all([
+    const [{ data: p }, { data: ch }, { data: bm }, { data: rt }, { data: dls }] = await Promise.all([
       supabase.from("pdfs").select("*").eq("id", id).maybeSingle(),
       supabase.from("chapters").select("*").eq("pdf_id", id).order("chapter_number"),
       supabase.from("bookmarks").select("id").eq("user_id", user.id).eq("pdf_id", id).maybeSingle(),
       supabase.from("ratings").select("*").eq("pdf_id", id).order("created_at", { ascending: false }).limit(3),
+      supabase.from("downloads").select("chapter_id").eq("user_id", user.id).eq("pdf_id", id),
     ]);
     setPdf(p as Pdf | null);
     setChapters((ch as Chapter[]) || []);
     setBookmarked(!!bm);
     setRatings((rt as Rating[]) || []);
+    setDownloadedChapterIds(new Set(((dls as any[]) || []).map((d) => d.chapter_id).filter(Boolean)));
+    const mine = ((rt as Rating[]) || []).find((r) => r.user_id === user.id);
+    setMyStars(mine?.stars || 0);
+    setReviewText(mine?.review_text || "");
+    const userIds = Array.from(new Set((((rt as Rating[]) || []).map((r) => r.user_id))));
+    if (userIds.length) {
+      const { data: users } = await supabase.from("profiles").select("id,full_name").in("id", userIds);
+      const mapped = ((users || []) as ReviewUser[]).reduce<Record<string, string>>((acc, u) => {
+        acc[u.id] = (u.full_name || "Student").split(" ")[0];
+        return acc;
+      }, {});
+      setReviewUsers(mapped);
+    }
     setLoading(false);
   };
 
@@ -63,28 +84,57 @@ const PdfDetail = () => {
     }
   };
 
-  // Reward callback: mark this module unlocked for the session, log the
-  // open as a "download" record (for analytics + XP), then open the
-  // in-app reader. NEVER trigger a file download to the device.
+  // Reward callback: download the file to local cache, persist download row,
+  // then open the local reader with no additional ad.
   const handleUnlocked = async () => {
     const ch = unlockChapter;
     if (!ch || !user || !id) return;
     setUnlockChapter(null);
     markModuleUnlocked(ch.id);
     setTick((t) => t + 1);
-
+    const fileName = `${pdf?.course_code || "HV"}-M${ch.chapter_number}-${ch.title}.pdf`;
+    const { data } = supabase.storage.from("chapters").getPublicUrl(ch.storage_path);
+    const localUri = await savePdfToDevice(data.publicUrl, fileName);
     await supabase.from("downloads").insert({ user_id: user.id, chapter_id: ch.id, pdf_id: id });
     const { data: prof } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
     await supabase.from("profiles").update({ xp: (prof?.xp || 0) + 10 }).eq("id", user.id);
     refreshProfile();
-
+    setDownloadedChapterIds((prev) => new Set([...prev, ch.id]));
+    setViewChapter({ ...ch, storage_path: localUri });
+    toast.success("Saved to your library");
+  };
+  const openRead = async (ch: Chapter) => {
+    const fileName = `${pdf?.course_code || "HV"}-M${ch.chapter_number}-${ch.title}.pdf`;
+    const local = await readPdfFromDevice(fileName);
+    if (local) {
+      setViewChapter({ ...ch, storage_path: local });
+      return;
+    }
     setViewChapter(ch);
   };
+
 
   const reportFile = async () => {
     if (!user || !id) return;
     await supabase.from("reports").insert({ user_id: user.id, pdf_id: id, reason: "Bad file reported by user" });
     toast.success("Thanks — admins will review");
+  };
+
+  const submitRating = async () => {
+    if (!user || !id || myStars < 1) return;
+    const payload = {
+      user_id: user.id,
+      pdf_id: id,
+      stars: myStars,
+      review_text: reviewText.trim() || null,
+    };
+    const { error } = await supabase.from("ratings").upsert(payload, { onConflict: "user_id,pdf_id" });
+    if (error) {
+      toast.error(error.message || "Could not save rating");
+      return;
+    }
+    toast.success("Rating saved");
+    load();
   };
 
   if (loading) {
@@ -185,8 +235,8 @@ const PdfDetail = () => {
 
         {/* Modules */}
         <section>
-          <h2 className="text-sm font-bold mb-1">Modules / Topics — watch an ad to read each one</h2>
-          <p className="text-[11px] text-muted-foreground mb-3">📖 Read inside HighVault — modules cannot be saved to your device.</p>
+          <h2 className="text-sm font-bold mb-1">Modules / Topics — watch an ad to download each one</h2>
+          <p className="text-[11px] text-muted-foreground mb-3">📖 Download once, then read from your library with no extra ad.</p>
           {chapters.length === 0 ? (
             <div className="surface-card p-6 text-center text-sm text-muted-foreground">
               No modules uploaded yet.
@@ -195,6 +245,7 @@ const PdfDetail = () => {
             <div className="space-y-2">
               {chapters.map((ch) => {
                 const unlocked = isModuleUnlocked(ch.id);
+                const isDownloaded = downloadedChapterIds.has(ch.id);
                 return (
                   <div
                     key={ch.id}
@@ -211,17 +262,17 @@ const PdfDetail = () => {
                           <span className="text-muted-foreground mr-1">M{ch.chapter_number}.</span>{ch.title}
                         </p>
                         <p className="text-[11px] text-muted-foreground">
-                          {ch.file_size_mb?.toFixed(1) || "—"} MB · {unlocked ? "Unlocked this session" : "Locked"}
+                          {ch.file_size_mb?.toFixed(1) || "—"} MB · {isDownloaded ? "Downloaded" : unlocked ? "Unlocked this session" : "Locked"}
                         </p>
                       </div>
-                      {unlocked ? (
+                      {isDownloaded ? (
                         <Button
                           size="sm"
-                          onClick={() => setViewChapter(ch)}
+                          onClick={() => openRead(ch)}
                           variant="outline"
                           className="bg-surface border-success/40 text-success text-xs h-8"
                         >
-                          <BookOpen className="h-3 w-3 mr-1" /> Read
+                          <BookOpen className="h-3 w-3 mr-1" /> Read 📖
                         </Button>
                       ) : (
                         <Button
@@ -229,12 +280,12 @@ const PdfDetail = () => {
                           onClick={() => setUnlockChapter(ch)}
                           className="bg-gradient-button border border-primary/40 text-primary text-xs h-8"
                         >
-                          <Play className="h-3 w-3 mr-1 fill-primary" /> Watch
+                          <Play className="h-3 w-3 mr-1 fill-primary" /> Download ⬇
                         </Button>
                       )}
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-2 inline-flex items-center gap-1">
-                      <Lock className="h-2.5 w-2.5" /> 📖 Read inside HighVault — no device download.
+                      <Lock className="h-2.5 w-2.5" /> Rewarded ad required before first download.
                     </p>
                   </div>
                 );
@@ -249,6 +300,34 @@ const PdfDetail = () => {
             <h2 className="text-sm font-bold">Reviews</h2>
             <button className="text-xs text-primary font-medium">See all →</button>
           </div>
+          <div className="surface-card p-3 mb-3 space-y-2">
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onMouseEnter={() => setHoverStars(star)}
+                  onMouseLeave={() => setHoverStars(0)}
+                  onClick={() => setMyStars(star)}
+                  className="p-0.5"
+                >
+                  <Star
+                    className={`h-5 w-5 transition-colors ${
+                      star <= (hoverStars || myStars) ? "fill-warning text-warning" : "text-muted-foreground"
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={reviewText}
+              onChange={(e) => setReviewText(e.target.value.slice(0, 200))}
+              placeholder="Optional review (max 200 chars)"
+              className="w-full min-h-[70px] text-xs rounded-lg border border-border bg-surface p-2"
+            />
+            <Button onClick={submitRating} className="h-8 text-xs">
+              {ratings.some((r) => r.user_id === user?.id) ? "Update" : "Submit"}
+            </Button>
+          </div>
           {ratings.length === 0 ? (
             <div className="surface-card p-4 text-center text-xs text-muted-foreground">
               Be the first to rate this material.
@@ -261,6 +340,7 @@ const PdfDetail = () => {
                     {Array.from({ length: r.stars }).map((_, i) => (
                       <Star key={i} className="h-3 w-3 fill-warning text-warning" />
                     ))}
+                    <span className="text-[10px] text-muted-foreground ml-2">{reviewUsers[r.user_id] || "Student"}</span>
                   </div>
                   {r.review_text && <p className="text-xs text-foreground/90">{r.review_text}</p>}
                 </div>

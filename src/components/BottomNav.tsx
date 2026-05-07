@@ -3,10 +3,10 @@ import { Home, Search, Play, Download, User } from "lucide-react";
 
 // Saved tab merged into Downloads. Five-item bottom nav.
 const items = [
-  { to: "/", label: "Home", icon: Home },
-  { to: "/browse", label: "Browse", icon: Search },
-  { to: "/watch", label: "Watch", icon: Play },
-  { to: "/downloads", label: "Library", icon: Download },
+  { to: "/", label: "Home", icon: Home, onboard: "" },
+  { to: "/browse", label: "Browse", icon: Search, onboard: "browse" },
+  { to: "/watch", label: "Watch", icon: Play, onboard: "watch" },
+  { to: "/downloads", label: "Library", icon: Download, onboard: "downloads" },
   { to: "/profile", label: "Profile", icon: User },
 ];
 
@@ -23,13 +23,14 @@ export const BottomNav = () => {
     >
       <div className="app-shell">
         <ul className="grid grid-cols-5">
-          {items.map(({ to, label, icon: Icon }) => {
+          {items.map(({ to, label, icon: Icon, onboard }) => {
             const active =
               to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
             return (
               <li key={to}>
                 <NavLink
                   to={to}
+                  data-onboarding={onboard || undefined}
                   className={`flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors ${
                     active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                   }`}

@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.highvault.futminna.app-mergeDebugResources-41:/values-ta/values-ta.xml",
+            "outputFile": "com.highvault.futminna.app-mergeDebugResources-40:/values-ta/values-ta.xml",
             "map": [
                 {
                     "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\2d58e25df94a3d638cead9f8942fb04d\\transformed\\play-services-basement-18.9.0\\res\\values-ta\\values.xml",
@@ -21,7 +21,7 @@
                     }
                 },
                 {
-                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\4aef5d6dbfa2eab3e0cf75d9b9b7eb7a\\transformed\\play-services-base-18.1.0\\res\\values-ta\\values.xml",
+                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\502158fab57e8726b7f2876f677a6e3b\\transformed\\play-services-base-18.0.0\\res\\values-ta\\values.xml",
                     "from": {
                         "startLines": "4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
                         "startColumns": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
@@ -35,23 +35,6 @@
                         "startOffsets": "3617,3722,3874,4001,4107,4259,4387,4500,4762,4942,5049,5202,5337,5491,5647,5709,5772",
                         "endColumns": "104,151,126,105,151,127,112,100,179,106,152,134,153,155,61,62,80",
                         "endOffsets": "3717,3869,3996,4102,4254,4382,4495,4596,4937,5044,5197,5332,5486,5642,5704,5767,5848"
-                    }
-                },
-                {
-                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\6ff3ddb4fe8a0a63339430bc9386266d\\transformed\\browser-1.8.0\\res\\values-ta\\values-ta.xml",
-                    "from": {
-                        "startLines": "2,3,4,5",
-                        "startColumns": "4,4,4,4",
-                        "startOffsets": "55,172,274,381",
-                        "endColumns": "116,101,106,103",
-                        "endOffsets": "167,269,376,480"
-                    },
-                    "to": {
-                        "startLines": "54,55,56,57",
-                        "startColumns": "4,4,4,4",
-                        "startOffsets": "5853,5970,6072,6179",
-                        "endColumns": "116,101,106,103",
-                        "endOffsets": "5965,6067,6174,6278"
                     }
                 },
                 {
@@ -69,6 +52,23 @@
                         "startOffsets": "6283,6334,6386,6446,6514,6594,6703,6770,6923,7047,7194,7249,7309,7438,7543,7588,7675,7713,7752,7811,7895,8125",
                         "endColumns": "50,51,59,67,79,108,66,152,123,146,54,59,128,104,44,86,37,38,58,83,46,59",
                         "endOffsets": "6329,6381,6441,6509,6589,6698,6765,6918,7042,7189,7244,7304,7433,7538,7583,7670,7708,7747,7806,7890,7937,8180"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\user\\.gradle\\caches\\8.14.3\\transforms\\af275dfc04c426ecf23b79de71c76bf1\\transformed\\browser-1.9.0\\res\\values-ta\\values-ta.xml",
+                    "from": {
+                        "startLines": "2,3,4,5",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,172,274,381",
+                        "endColumns": "116,101,106,103",
+                        "endOffsets": "167,269,376,480"
+                    },
+                    "to": {
+                        "startLines": "54,55,56,57",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "5853,5970,6072,6179",
+                        "endColumns": "116,101,106,103",
+                        "endOffsets": "5965,6067,6174,6278"
                     }
                 },
                 {

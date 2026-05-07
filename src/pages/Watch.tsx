@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Play, Search, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { SplashLoader } from "@/components/SplashLoader";
 
 import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
 
@@ -27,6 +28,7 @@ interface Video {
 
 const Watch = () => {
   const [pageError, setPageError] = useState<string | null>(null);
+  const [loadingData, setLoadingData] = useState(true);
   const openYouTube = useRewardedYouTubeOpener();
   const [level, setLevel] = useState("All");
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -41,6 +43,7 @@ const Watch = () => {
 
   useEffect(() => {
   const load = async () => {
+    setLoadingData(true);
     try {
       let chQ = supabase
         .from("youtube_channels")
@@ -77,8 +80,15 @@ const Watch = () => {
       console.error("Featured videos error:", e);
       setFeatured([]);
     }
+    setLoadingData(false);
   };
-  load();
+  load().catch((err) => {
+    console.error("Watch load fatal error:", err);
+    setChannels([]);
+    setFeatured([]);
+    setPageError("We could not load this page right now.");
+    setLoadingData(false);
+  });
 }, [level]);
 
   const runSearch = async (q: string) => {
@@ -123,7 +133,8 @@ const Watch = () => {
       <p>📺 {pageError}</p>
     </div>
   );
-  return (
+  try {
+    return (
     <div className="space-y-5">
       <div>
         <div className="flex items-center gap-2">
@@ -203,9 +214,24 @@ const Watch = () => {
       )}
 
       {showSearchResults ? null : (<>
+      {loadingData && <SplashLoader label="Loading channels..." />}
+      {loadingData && (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="surface-card p-3 flex gap-3 animate-pulse">
+              <div className="h-20 w-20 shrink-0 rounded-lg bg-muted" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-2/3 bg-muted rounded" />
+                <div className="h-2.5 w-1/2 bg-muted rounded" />
+                <div className="h-7 w-24 bg-muted rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Featured videos */}
-      {featured.length > 0 && (
+      {!loadingData && featured.length > 0 && (
         <section>
           <h2 className="text-sm font-bold mb-3">Featured videos</h2>
           <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
@@ -246,11 +272,11 @@ const Watch = () => {
       </div>
 
       {/* Channels grid */}
-      {channels.length === 0 ? (
+      {!loadingData && channels.length === 0 ? (
         <div className="surface-card p-8 text-center text-sm text-muted-foreground">
-          No channels yet for this level.
+          No learning channels yet 📺
         </div>
-      ) : (
+      ) : !loadingData ? (
         <div className="space-y-3">
           {channels.map((c) => (
             <div key={c.id} className="surface-card p-3 flex gap-3">
@@ -283,7 +309,16 @@ const Watch = () => {
       )}
       </>)}
     </div>
-  );
+    );
+  } catch (err) {
+    console.error("Watch render failed:", err);
+    if (!pageError) setPageError("We could not load this page right now.");
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        <p>📺 We could not load this page right now.</p>
+      </div>
+    );
+  }
 };
 
 export default Watch;

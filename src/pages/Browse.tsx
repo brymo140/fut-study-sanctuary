@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Search, X, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
+import { SplashLoader } from "@/components/SplashLoader";
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 type Tab = "materials" | "past";
@@ -18,21 +19,35 @@ const shuffle = <T,>(arr: T[]) => {
 };
 
 const Browse = () => {
+  const HISTORY_KEY = "hv_search_history";
   const [tab, setTab] = useState<Tab>("materials");
   const [level, setLevel] = useState("All");
   const [pdfs, setPdfs] = useState<PdfSummary[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Search is hidden by default — opens via the magnifying-glass button.
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      setHistory(JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]").slice(0, 5));
+    } catch {
+      setHistory([]);
+    }
+  }, []);
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true);
       let q = supabase.from("pdfs").select("*").limit(80);
       q = q.eq("is_past_question", tab === "past");
       if (level !== "All") q = q.eq("level", level as "100L");
       const { data } = await q;
       setPdfs(shuffle((data as PdfSummary[]) || []));
+      setLoading(false);
     };
     load();
   }, [tab, level]);
@@ -43,6 +58,16 @@ const Browse = () => {
         p.course_code.toLowerCase().includes(search.toLowerCase())
       )
     : pdfs;
+
+  const persistHistory = (term: string) => {
+    const clean = term.trim();
+    if (!clean) return;
+    const next = [clean, ...history.filter((h) => h.toLowerCase() !== clean.toLowerCase())].slice(0, 5);
+    setHistory(next);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  };
+
+  if (loading) return <SplashLoader label="Loading materials..." />;
 
   return (
     <div className="space-y-4">
@@ -64,9 +89,52 @@ const Browse = () => {
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onBlur={() => setSearchFocused(false)}
+            onFocus={() => setSearchFocused(true)}
+            onKeyDown={(e) => e.key === "Enter" && persistHistory(search)}
             placeholder="Search title or course code…"
             className="w-full bg-surface border border-border rounded-2xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-primary"
           />
+          {searchFocused && !search.trim() && history.length > 0 && (
+            <div className="surface-card mt-2 p-3">
+              <div className="flex flex-wrap gap-2">
+                {history.map((term) => (
+                  <button
+                    key={term}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setSearch(term);
+                      persistHistory(term);
+                    }}
+                    className="text-xs px-2 py-1 rounded-full border border-border bg-surface-elevated"
+                  >
+                    {term}
+                    <span
+                      className="ml-2 text-muted-foreground"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        const next = history.filter((h) => h !== term);
+                        setHistory(next);
+                        localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+                      }}
+                    >
+                      ×
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <button
+                className="text-xs text-primary mt-2"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setHistory([]);
+                  localStorage.removeItem(HISTORY_KEY);
+                }}
+              >
+                Clear all
+              </button>
+            </div>
+          )}
         </div>
       )}
 

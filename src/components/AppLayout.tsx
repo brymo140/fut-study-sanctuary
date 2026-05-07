@@ -5,6 +5,7 @@ import { AITutor } from "./AITutor";
 import { InterstitialAdHost } from "./ads/InterstitialAdHost";
 import { initAdMob, showBanner, hideBanner } from "@/lib/admob";
 import { AdSession } from "@/lib/adSession";
+import { OnboardingGuide } from "./OnboardingGuide";
 
 export const AppLayout = ({ children }: { children: ReactNode }) => {
   const { pathname } = useLocation();
@@ -33,9 +34,10 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
   return (
     // Bottom padding reserves space for the bottom nav + AdMob banner + safe-area inset
     // so content is never hidden behind native chrome.
-    <div className="min-h-screen" style={{ paddingBottom: "var(--bottom-chrome)" }}>
+    <div className="min-h-screen" style={{ paddingBottom: "calc(58px + 50px + var(--sab))" }}>
       <div className={`${isAdmin ? "max-w-5xl mx-auto" : "app-shell"} px-4 pt-4`}>{children}</div>
       {!isAdmin && <AITutor />}
+      {!isAdmin && <OnboardingGuide />}
       <BottomNav />
       <InterstitialAdHost />
     </div>

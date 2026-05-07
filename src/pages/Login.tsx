@@ -82,7 +82,7 @@ const Login = () => {
 
   const google = async () => {
     localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
-    const r = await signInWithGoogleSmart(window.location.origin);
+    const r = await signInWithGoogleSmart(`${window.location.origin}/auth/callback`);
     if ((r as any)?.error) toast.error("Could not start Google sign in");
   };
 

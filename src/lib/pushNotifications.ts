@@ -2,6 +2,7 @@
 // no-ops in the browser. Admin actions also write a row into the in-app
 // notifications table so the bell + toast experience works on the web build.
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 let inited = false;
 
@@ -71,5 +72,16 @@ export const sendPushNotification = async (payload: PushPayload) => {
     await supabase.functions.invoke("send-push", { body: payload });
   } catch (err) {
     console.warn("send-push invoke failed (non-fatal)", err);
+  }
+};
+
+export const maybeShowStudyReminder = () => {
+  const key = "hv_last_reminder";
+  const now = Date.now();
+  const last = Number(localStorage.getItem(key) || "0");
+  const threeDays = 3 * 24 * 60 * 60 * 1000;
+  if (!last || now - last > threeDays) {
+    toast("📚 New materials are waiting in the Vault — come grab yours!");
+    localStorage.setItem(key, String(now));
   }
 };

@@ -373,7 +373,6 @@
     <string name="fallback_menu_item_copy_link">Copy link</string>
     <string name="fallback_menu_item_open_in_browser">Open in browser</string>
     <string name="fallback_menu_item_share_link">Share link</string>
-    <string name="fcm_fallback_notification_channel_label">Miscellaneous</string>
     <string description="This string appears within a window that describes an ad&apos;s contents. It indicates that the following text would be the body field (textual content) of the native ad. [CHAR_LIMIT=NONE]" name="native_body">
     Body
   </string>
@@ -1993,14 +1992,6 @@
     <style name="Widget.Compat.NotificationActionText" parent=""/>
     <style name="Widget.Support.CoordinatorLayout" parent="android:Widget">
         <item name="statusBarBackground">#000000</item>
-    </style>
-    <style name="capacitor_default_style" parent="AppTheme.NoActionBar">
-    </style>
-    <style name="capacitor_full_screen_style" parent="AppTheme.NoActionBar">
-        <item name="android:windowFullscreen">true</item>
-    </style>
-    <style name="capacitor_immersive_style" parent="capacitor_full_screen_style">
-        <item name="android:windowTranslucentNavigation">true</item>
     </style>
     <declare-styleable name="ActionBar">
         

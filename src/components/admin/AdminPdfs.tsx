@@ -23,6 +23,7 @@ interface Subject {
   total_chapters: number;
   download_count: number;
   created_at: string;
+  is_past_question?: boolean;
 }
 
 interface ModuleRow {
@@ -32,6 +33,8 @@ interface ModuleRow {
 }
 
 type Step = "list" | "subject" | "modules";
+type UploadType = "modular" | "single";
+type AdminTab = "subjects" | "past";
 
 export const AdminPdfs = () => {
   const { user } = useAuth();
@@ -39,6 +42,7 @@ export const AdminPdfs = () => {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Subject | null>(null);
   const [busy, setBusy] = useState(false);
+  const [adminTab, setAdminTab] = useState<AdminTab>("subjects");
 
   const [step, setStep] = useState<Step>("list");
   const [activeSubject, setActiveSubject] = useState<Subject | null>(null);
@@ -56,6 +60,17 @@ export const AdminPdfs = () => {
   };
   const [subjectForm, setSubjectForm] = useState(emptySubject);
   const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [uploadType, setUploadType] = useState<UploadType>("modular");
+  const [singlePdfFile, setSinglePdfFile] = useState<File | null>(null);
+  const [pastForm, setPastForm] = useState({
+    title: "",
+    course_code: "",
+    level: "100L",
+    year: "",
+    department: "",
+    faculty: "",
+  });
+  const [pastFile, setPastFile] = useState<File | null>(null);
 
   const [modules, setModules] = useState<ModuleRow[]>([
     { module_number: 1, module_title: "", file: null },
@@ -64,7 +79,7 @@ export const AdminPdfs = () => {
   const reload = async () => {
     const { data } = await supabase
       .from("pdfs")
-      .select("id,title,course_code,level,department,faculty,description,cover_url,tags,is_verified,total_chapters,download_count,created_at")
+      .select("id,title,course_code,level,department,faculty,description,cover_url,tags,is_verified,total_chapters,download_count,created_at,is_past_question")
       .order("created_at", { ascending: false });
     setList((data || []) as Subject[]);
   };
@@ -83,9 +98,13 @@ export const AdminPdfs = () => {
       if (coverFile) {
         const path = `subject-${Date.now()}-${coverFile.name}`;
         const { error: upErr } = await supabase.storage.from("covers").upload(path, coverFile, { upsert: true });
-        if (upErr) throw upErr;
-        const { data: pub } = supabase.storage.from("covers").getPublicUrl(path);
-        coverUrl = pub.publicUrl;
+        if (upErr) {
+          console.error("Cover upload failed:", upErr);
+          toast.error("Cover upload failed — using URL field instead.");
+        } else {
+          const { data: pub } = supabase.storage.from("covers").getPublicUrl(path);
+          coverUrl = pub.publicUrl;
+        }
       }
       const tags = subjectForm.tags.split(",").map((t) => t.trim()).filter(Boolean);
       const subjectPayload = {
@@ -98,21 +117,40 @@ export const AdminPdfs = () => {
         cover_url: coverUrl,
         tags,
         is_verified: subjectForm.is_verified,
+        is_general: uploadType === "single",
         total_chapters: 0,
         uploader_id: user.id,
       };
       const { data: subj, error } = await withSchemaRetry(async () => await supabase.from("pdfs").insert(subjectPayload).select().single());
       if (error) throw error;
       setActiveSubject(subj as Subject);
-      setModules([{ module_number: 1, module_title: "", file: null }]);
-      setStep("modules");
-      sendPushNotification({
-        target_level: subjectForm.level,
-        target_department: subjectForm.department || null,
-        title: "HighVault 📚",
-        body: `New study material added for ${subjectForm.level} students! 📚`,
-        url: `/pdf/${(subj as Subject).id}`,
-      });
+      if (uploadType === "single" && singlePdfFile) {
+        const path = `${(subj as Subject).id}/single-${Date.now()}-${singlePdfFile.name}`;
+        const { error: upErr } = await supabase.storage.from("chapters").upload(path, singlePdfFile);
+        if (upErr) throw upErr;
+        await supabase.from("chapters").insert({
+          pdf_id: (subj as Subject).id,
+          chapter_number: 1,
+          title: "Full PDF",
+          storage_path: path,
+          file_size_mb: Math.round((singlePdfFile.size / (1024 * 1024)) * 10) / 10,
+        });
+        await supabase.from("pdfs").update({ total_chapters: 1 }).eq("id", (subj as Subject).id);
+        setStep("list");
+        setSinglePdfFile(null);
+        setUploadType("modular");
+        sendPushNotification({
+          target_level: subjectForm.level,
+          target_department: subjectForm.department || null,
+          title: "HighVault 📚",
+          body: `New study material added for ${subjectForm.level} students! 📚`,
+          url: `/pdf/${(subj as Subject).id}`,
+        });
+        toast.success("Single PDF uploaded");
+      } else {
+        setModules([{ module_number: 1, module_title: "", file: null }]);
+        setStep("modules");
+      }
       toast.success("Subject created — now add modules");
       reload();
     } catch (e: any) {
@@ -168,6 +206,13 @@ export const AdminPdfs = () => {
         file_size_mb: Math.round((totalSize / (1024 * 1024)) * 10) / 10,
       }).eq("id", activeSubject.id));
       if (pdfErr) throw pdfErr;
+      sendPushNotification({
+        target_level: activeSubject.level,
+        target_department: activeSubject.department || null,
+        title: "HighVault 📚",
+        body: `New study material added for ${activeSubject.level} students! 📚`,
+        url: `/pdf/${activeSubject.id}`,
+      });
 
       toast.success(`Saved ${valid.length} module${valid.length > 1 ? "s" : ""}`);
       setStep("list");
@@ -219,6 +264,57 @@ export const AdminPdfs = () => {
   const filtered = list.filter((p) =>
     !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.course_code.toLowerCase().includes(search.toLowerCase())
   );
+  const filteredPast = filtered.filter((p: any) => p.is_past_question === true);
+  const filteredSubjects = filtered.filter((p: any) => p.is_past_question !== true);
+
+  const uploadPastQuestion = async () => {
+    if (!user) return;
+    if (!pastForm.title || !pastForm.course_code || !pastFile) {
+      toast.error("Title, course code and PDF file are required");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { data: pdfRow, error: pdfErr } = await supabase.from("pdfs").insert({
+        title: pastForm.title,
+        course_code: pastForm.course_code,
+        level: pastForm.level as any,
+        department: pastForm.department || null,
+        faculty: pastForm.faculty || null,
+        description: pastForm.year ? `Past Question (${pastForm.year})` : "Past Question",
+        is_past_question: true,
+        total_chapters: 1,
+        uploader_id: user.id,
+      }).select().single();
+      if (pdfErr) throw pdfErr;
+      const storagePath = `${pdfRow.id}/pastq-${Date.now()}-${pastFile.name}`;
+      const { error: upErr } = await supabase.storage.from("chapters").upload(storagePath, pastFile);
+      if (upErr) throw upErr;
+      const { error: chErr } = await supabase.from("chapters").insert({
+        pdf_id: pdfRow.id,
+        chapter_number: 1,
+        title: `${pastForm.course_code} ${pastForm.year || ""}`.trim(),
+        storage_path: storagePath,
+        file_size_mb: Math.round((pastFile.size / (1024 * 1024)) * 10) / 10,
+      });
+      if (chErr) throw chErr;
+      sendPushNotification({
+        target_level: pastForm.level,
+        target_department: null,
+        title: "HighVault 📚",
+        body: `New past question uploaded for ${pastForm.level}`,
+        url: `/pdf/${pdfRow.id}`,
+      });
+      setPastForm({ title: "", course_code: "", level: "100L", year: "", department: "", faculty: "" });
+      setPastFile(null);
+      toast.success("Past question uploaded");
+      reload();
+    } catch (e: any) {
+      toast.error(e.message || "Past question upload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   /* ---------- RENDER ---------- */
 
@@ -250,12 +346,28 @@ export const AdminPdfs = () => {
               className="block w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-border file:bg-surface file:text-foreground file:text-xs mb-2" />
             <input className={inputClass} value={subjectForm.cover_url} onChange={(e) => setSubjectForm({ ...subjectForm, cover_url: e.target.value })} placeholder="https://… (used if no file)" />
           </Field>
+          <Field label="Upload Type">
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setUploadType("modular")} className={`px-3 py-2 rounded-md text-xs border ${uploadType === "modular" ? "border-primary text-primary" : "border-border"}`}>Modular</button>
+              <button type="button" onClick={() => setUploadType("single")} className={`px-3 py-2 rounded-md text-xs border ${uploadType === "single" ? "border-primary text-primary" : "border-border"}`}>Single PDF</button>
+            </div>
+          </Field>
+          {uploadType === "single" && (
+            <Field label="Single PDF File">
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={(e) => setSinglePdfFile(e.target.files?.[0] || null)}
+                className="block w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-border file:bg-surface file:text-foreground file:text-xs"
+              />
+            </Field>
+          )}
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={subjectForm.is_verified} onChange={(e) => setSubjectForm({ ...subjectForm, is_verified: e.target.checked })} />
             <span>Mark as Rep Verified</span>
           </label>
           <button disabled={busy} onClick={createSubject} className="w-full bg-gradient-button border border-primary/40 text-primary text-sm font-semibold rounded-lg py-2.5 disabled:opacity-50">
-            {busy ? "Creating…" : "Create Subject & Continue →"}
+            {busy ? "Creating…" : uploadType === "single" ? "Create & Upload Single PDF →" : "Create Subject & Continue →"}
           </button>
         </div>
       </div>
@@ -347,10 +459,49 @@ export const AdminPdfs = () => {
           </button>
         }
       />
+      <div className="flex gap-2 surface-card p-1 rounded-xl">
+        <button
+          onClick={() => setAdminTab("subjects")}
+          className={`flex-1 py-2 text-xs font-medium rounded-lg ${adminTab === "subjects" ? "bg-gradient-button border border-primary/40 text-primary" : "text-muted-foreground"}`}
+        >
+          Subjects
+        </button>
+        <button
+          onClick={() => setAdminTab("past")}
+          className={`flex-1 py-2 text-xs font-medium rounded-lg ${adminTab === "past" ? "bg-gradient-button border border-primary/40 text-primary" : "text-muted-foreground"}`}
+        >
+          Past Questions
+        </button>
+      </div>
+
+      {adminTab === "past" && (
+        <div className="surface-card p-4 space-y-3">
+          <p className="text-sm font-bold">Upload Past Question</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Title"><input className={inputClass} value={pastForm.title} onChange={(e) => setPastForm({ ...pastForm, title: e.target.value })} /></Field>
+            <Field label="Course Code"><input className={inputClass} value={pastForm.course_code} onChange={(e) => setPastForm({ ...pastForm, course_code: e.target.value })} /></Field>
+            <Field label="Level">
+              <select className={inputClass} value={pastForm.level} onChange={(e) => setPastForm({ ...pastForm, level: e.target.value })}>
+                {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </Field>
+            <Field label="Year"><input className={inputClass} value={pastForm.year} onChange={(e) => setPastForm({ ...pastForm, year: e.target.value })} placeholder="2024" /></Field>
+            <Field label="Department"><input className={inputClass} value={pastForm.department} onChange={(e) => setPastForm({ ...pastForm, department: e.target.value })} /></Field>
+            <Field label="Faculty"><input className={inputClass} value={pastForm.faculty} onChange={(e) => setPastForm({ ...pastForm, faculty: e.target.value })} /></Field>
+          </div>
+          <Field label="PDF File">
+            <input type="file" accept="application/pdf" onChange={(e) => setPastFile(e.target.files?.[0] || null)}
+              className="block w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-border file:bg-surface file:text-foreground file:text-xs" />
+          </Field>
+          <button disabled={busy} onClick={uploadPastQuestion} className="w-full bg-gradient-button border border-primary/40 text-primary text-sm font-semibold rounded-lg py-2.5 disabled:opacity-50">
+            {busy ? "Uploading…" : "Upload Past Question"}
+          </button>
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-bold">All subjects ({list.length})</p>
+          <p className="text-sm font-bold">{adminTab === "past" ? `Past questions (${filteredPast.length})` : `All subjects (${filteredSubjects.length})`}</p>
           <input className={`${inputClass} max-w-[200px]`} placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <TableShell>
@@ -358,7 +509,7 @@ export const AdminPdfs = () => {
             <Th>Title</Th><Th>Code</Th><Th>Level</Th><Th>Modules</Th><Th>DLs</Th><Th>Verified</Th><Th>Date</Th><Th>Actions</Th>
           </tr></thead>
           <tbody>
-            {filtered.length === 0 ? <EmptyRow cols={8} text="No subjects yet." /> : filtered.map((p) => (
+            {(adminTab === "past" ? filteredPast : filteredSubjects).length === 0 ? <EmptyRow cols={8} text="No items yet." /> : (adminTab === "past" ? filteredPast : filteredSubjects).map((p) => (
               <tr key={p.id}>
                 <Td className="font-medium max-w-[180px] truncate">{p.title}</Td>
                 <Td>{p.course_code}</Td>

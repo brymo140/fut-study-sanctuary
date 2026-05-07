@@ -7,8 +7,11 @@ import { PdfCard, PdfSummary } from "@/components/PdfCard";
 import { AnnouncementsSheet } from "@/components/AnnouncementsSheet";
 import { NotificationsSheet } from "@/components/NotificationsSheet";
 import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
-import { initPushNotifications } from "@/lib/pushNotifications";
+import { initPushNotifications, maybeShowStudyReminder } from "@/lib/pushNotifications";
 import { cacheData, getCachedData } from "@/lib/cache";
+import { SplashLoader } from "@/components/SplashLoader";
+import { useOnline } from "@/hooks/useOnline";
+import { AdMobBannerSlot } from "@/components/ads/AdMobBannerSlot";
 
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
@@ -32,10 +35,15 @@ const Home = () => {
   const [annOpen, setAnnOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const online = useOnline();
 
   // Init push notifications on first home load.
   useEffect(() => {
-    if (user?.id) initPushNotifications(user.id);
+    if (user?.id) {
+      initPushNotifications(user.id);
+      maybeShowStudyReminder();
+    }
   }, [user?.id]);
 
   useEffect(() => {
@@ -65,9 +73,12 @@ const Home = () => {
         cacheData(cacheKey, { t: tt, r: rr, c: cc });
       } catch (e) {
         console.warn("home load failed", e);
+      } finally {
+        setLoading(false);
       }
     };
     if (navigator.onLine) load();
+    else setLoading(false);
   }, [activeLevel]);
 
   // Compute unread count using notification_reads (per-user dismissals).
@@ -116,6 +127,8 @@ const Home = () => {
   const initials = (profile?.full_name || profile?.email || "U")
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
   const firstName = (profile?.full_name || profile?.email || "there").split(" ")[0];
+
+  if (loading) return <SplashLoader label="Loading Home..." />;
 
   return (
     <div className="space-y-5">
@@ -184,6 +197,7 @@ const Home = () => {
           </div>
         )}
       </Section>
+      {online && <AdMobBannerSlot />}
 
       <Section
         title="Learning channels"
@@ -216,6 +230,7 @@ const Home = () => {
           </div>
         )}
       </Section>
+      {online && <AdMobBannerSlot />}
 
       <Section title="Recently added" subtitle="Fresh uploads from class reps">
         {recent.length === 0 ? (

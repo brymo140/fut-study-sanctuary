@@ -23,9 +23,9 @@ export const savePdfToDevice = async (
     reader.readAsDataURL(blob);
   });
   const result = await Filesystem.writeFile({
-    path: `highvault/${safeName(fileName)}`,
+    path: `highvault/chapters/${safeName(fileName)}`,
     data: base64,
-    directory: Directory.Documents,
+    directory: Directory.Cache,
     recursive: true,
   });
   onProgress?.(100);
@@ -37,8 +37,8 @@ export const readPdfFromDevice = async (fileName: string): Promise<string | null
   try {
     const { Filesystem, Directory } = await import("@capacitor/filesystem");
     const result = await Filesystem.readFile({
-      path: `highvault/${safeName(fileName)}`,
-      directory: Directory.Documents,
+      path: `highvault/chapters/${safeName(fileName)}`,
+      directory: Directory.Cache,
     });
     return `data:application/pdf;base64,${result.data}`;
   } catch {

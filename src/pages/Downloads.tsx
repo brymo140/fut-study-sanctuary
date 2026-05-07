@@ -15,6 +15,7 @@ interface Chapter {
 }
 interface Subject {
   id: string; title: string; course_code: string; level: string; cover_url?: string | null;
+  is_general?: boolean; is_past_question?: boolean;
 }
 interface SubjectGroup {
   subject: Subject;
@@ -53,14 +54,15 @@ const Downloads = () => {
       .from("downloads")
       .select("chapter_id, pdf_id")
       .eq("user_id", user.id);
-    const downloadedIds = new Set<string>(((dls as any[]) || []).map((d) => d.chapter_id));
+    const downloadedIds = new Set<string>(((dls as any[]) || []).map((d) => d.chapter_id).filter(Boolean));
+    const downloadedPdfIds = new Set<string>(((dls as any[]) || []).map((d) => d.pdf_id).filter(Boolean));
     const subjectIds = Array.from(new Set(((dls as any[]) || []).map((d) => d.pdf_id)));
 
     let subjects: Subject[] = [];
     let chapters: Chapter[] = [];
     if (subjectIds.length) {
       const [{ data: subs }, { data: chs }] = await Promise.all([
-        supabase.from("pdfs").select("id,title,course_code,level,cover_url").in("id", subjectIds),
+        supabase.from("pdfs").select("id,title,course_code,level,cover_url,is_general,is_past_question").in("id", subjectIds),
         supabase.from("chapters").select("id,title,chapter_number,storage_path,pdf_id").in("pdf_id", subjectIds).order("chapter_number"),
       ]);
       subjects = (subs as Subject[]) || [];
@@ -70,7 +72,7 @@ const Downloads = () => {
     const result: SubjectGroup[] = subjects.map((s) => ({
       subject: s,
       chapters: chapters.filter((c: any) => c.pdf_id === s.id),
-      downloadedChapterIds: new Set(chapters.filter((c: any) => c.pdf_id === s.id && downloadedIds.has(c.id)).map((c) => c.id)),
+      downloadedChapterIds: new Set(chapters.filter((c: any) => c.pdf_id === s.id && (downloadedIds.has(c.id) || downloadedPdfIds.has(s.id))).map((c) => c.id)),
       localPaths,
     }));
     setGroups(result);
@@ -169,6 +171,8 @@ const Downloads = () => {
                     <p className="text-sm font-bold line-clamp-1">{g.subject.title}</p>
                     <p className="text-[11px] text-muted-foreground">
                       {g.subject.course_code} · <span className="badge-blue ml-0.5">{g.subject.level}</span>
+                      {g.subject.is_general && <span className="badge-purple ml-1">Single PDF</span>}
+                      {g.subject.is_past_question && <span className="badge-amber ml-1">Past Q</span>}
                     </p>
                     <div className="flex items-center gap-2 mt-1.5">
                       <div className="flex-1 h-1 rounded-full bg-border overflow-hidden">

@@ -17,7 +17,7 @@ const Welcome = () => {
   }, [loading, session, navigate]);
 
   const handleGoogle = async () => {
-    const result = await signInWithGoogleSmart(window.location.origin);
+    const result = await signInWithGoogleSmart(`${window.location.origin}/auth/callback`);
     if ((result as any)?.error) toast.error("Could not start Google sign in");
   };
 
