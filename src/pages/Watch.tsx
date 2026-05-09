@@ -88,17 +88,11 @@ const Watch = () => {
     setLoadingData(false);
   };
   load().catch((err) => {
-    console.error("Watch load fatal error:", err);
-    // Only set pageError for truly catastrophic errors
-    if (err.message && err.message.includes('Network') || err.message && err.message.includes('fetch')) {
-      setPageError("Network error. Please check your connection.");
-    } else {
-      // For other errors, just show empty state
-      setChannels([]);
-      setFeatured([]);
-    }
-    setLoadingData(false);
-  });
+  console.error("Watch load fatal error:", err);
+  setChannels([]);
+  setFeatured([]);
+  setLoadingData(false);
+});
 }, [level]);
 
   const runSearch = async (q: string) => {
