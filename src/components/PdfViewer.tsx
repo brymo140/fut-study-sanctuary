@@ -38,67 +38,39 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName
   }, [open, storagePath, chapterId]);
 
   const loadPdf = async () => {
-    setLoading(true);
-    setError(null);
+  setLoading(true);
+  setError(null);
 
-    // Try local file first (for downloaded PDFs)
-    if (chapterId) {
-      const localPath = localStorage.getItem(`hv_dl_${chapterId}`);
-      if (localPath) {
-        try {
-          const result = await Filesystem.readFile({
-            path: `highvault/chapters/${localPath}`,
-            directory: Directory.Cache
-          });
-          const base64 = result.data as string;
-          const byteChars = atob(base64);
-          const byteArr = new Uint8Array(byteChars.length);
-          for (let i = 0; i < byteChars.length; i++) {
-            byteArr[i] = byteChars.charCodeAt(i);
-          }
-          const blob = new Blob([byteArr], { type: 'application/pdf' });
-          const blobUrl = URL.createObjectURL(blob);
-          setUrl(blobUrl);
-          setLoading(false);
-          return;
-        } catch (e) {
-          console.log('Local file not found, trying remote');
-        }
-      }
-    }
-
-    // Fall back to remote URL
-    if (!storagePath) {
-      setError('No PDF available');
-      setLoading(false);
-      return;
-    }
-
-    if (isOffline) {
-      setError('You are offline. Download this PDF first to read it offline.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { data } = await supabase.storage
-        .from("chapters")
-        .createSignedUrl(storagePath, 60 * 60);
-
-      if (!data?.signedUrl) {
-        setError('Could not load PDF. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Use Google Docs viewer for remote PDFs
-      const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(data.signedUrl)}&embedded=true`;
-      setUrl(viewerUrl);
-    } catch (e) {
-      setError('Failed to load PDF. Check your connection.');
-    }
+  if (!storagePath) {
+    setError('No PDF available');
     setLoading(false);
-  };
+    return;
+  }
+
+  if (isOffline) {
+    setError('You are offline. Connect to internet to read this PDF.');
+    setLoading(false);
+    return;
+  }
+
+  try {
+    const { data } = await supabase.storage
+      .from("chapters")
+      .createSignedUrl(storagePath, 60 * 60);
+
+    if (!data?.signedUrl) {
+      setError('Could not load PDF. Please try again.');
+      setLoading(false);
+      return;
+    }
+
+    const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(data.signedUrl)}&embedded=true`;
+    setUrl(viewerUrl);
+  } catch (e) {
+    setError('Failed to load PDF. Check your connection.');
+  }
+  setLoading(false);
+};
 
   // Block right click
   useEffect(() => {
