@@ -9,7 +9,7 @@ export const SplashLoader = ({ label = "Loading..." }: { label?: string }) => {
           alt="HighVault"
           className="relative h-16 w-16 object-contain animate-heartbeat"
           onError={(e) => {
-            (e.currentTarget as HTMLImageElement).src = "/placeholder.svg";
+            (e.currentTarget as HTMLImageElement).src = "/favicon.png";
           }}
         />
       </div>
