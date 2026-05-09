@@ -54,21 +54,38 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName
   }
 
   try {
-    const { data } = await supabase.storage
+    console.log('[PdfViewer] storagePath:', storagePath);
+
+    const { data, error: signedUrlError } = await supabase.storage
       .from("chapters")
       .createSignedUrl(storagePath, 60 * 60);
 
-    if (!data?.signedUrl) {
-      setError('Could not load PDF. Please try again.');
+    console.log('[PdfViewer] signedUrl data:', data);
+    console.log('[PdfViewer] signedUrl error:', signedUrlError);
+
+    if (signedUrlError) {
+      setError(`Storage error: ${signedUrlError.message}`);
       setLoading(false);
       return;
     }
 
+    if (!data?.signedUrl) {
+      setError('Could not generate PDF link. Please try again.');
+      setLoading(false);
+      return;
+    }
+
+    console.log('[PdfViewer] signedUrl:', data.signedUrl);
+
     const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(data.signedUrl)}&embedded=true`;
+    console.log('[PdfViewer] viewerUrl:', viewerUrl);
     setUrl(viewerUrl);
-  } catch (e) {
-    setError('Failed to load PDF. Check your connection.');
+
+  } catch (e: any) {
+    console.error('[PdfViewer] error:', e);
+    setError(`Failed to load PDF: ${e?.message || 'Unknown error'}`);
   }
+
   setLoading(false);
 };
 
