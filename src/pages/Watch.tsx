@@ -325,9 +325,11 @@ const Watch = () => {
                       {c.description && (
                         <p className="text-xs text-muted-foreground line-clamp-2">{c.description}</p>
                       )}
-                      {c.course_tags && c.course_tags.length > 0 && (
+                      {c.course_tags && (
                         <p className="text-xs text-muted-foreground">
-                          {c.course_tags.join(" · ")}
+                          {Array.isArray(c.course_tags) 
+                            ? c.course_tags.join(" · ") 
+                            : String(c.course_tags)}
                         </p>
                       )}
                       <button
