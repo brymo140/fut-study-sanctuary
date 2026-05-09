@@ -44,6 +44,7 @@ const Watch = () => {
   useEffect(() => {
   const load = async () => {
     setLoadingData(true);
+    setPageError(null); // Reset error on load
     try {
       let chQ = supabase
         .from("youtube_channels")
@@ -53,15 +54,17 @@ const Watch = () => {
         .order("created_at", { ascending: false });
       if (level !== "All") chQ = chQ.eq("level", level as any);
       const { data: ch, error: chError } = await chQ;
-      console.log("[Watch] channels query returned:", ch);
+      console.log('Watch channels result:', ch, chError);
       if (chError) {
         console.error("Channels error:", chError);
+        // Don't set pageError for channels query - just show empty state
         setChannels([]);
       } else {
         setChannels((ch as Channel[]) || []);
       }
     } catch (e) {
       console.error("Watch page load error:", e);
+      // Don't set pageError for general errors - just show empty state
       setChannels([]);
     }
 
@@ -86,9 +89,14 @@ const Watch = () => {
   };
   load().catch((err) => {
     console.error("Watch load fatal error:", err);
-    setChannels([]);
-    setFeatured([]);
-    setPageError("We could not load this page right now.");
+    // Only set pageError for truly catastrophic errors
+    if (err.message && err.message.includes('Network') || err.message && err.message.includes('fetch')) {
+      setPageError("Network error. Please check your connection.");
+    } else {
+      // For other errors, just show empty state
+      setChannels([]);
+      setFeatured([]);
+    }
     setLoadingData(false);
   });
 }, [level]);

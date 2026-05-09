@@ -5,9 +5,10 @@ import { Logo } from "@/components/Logo";
 import { AuthBack } from "@/components/AuthBack";
 import { PasswordInput } from "@/components/PasswordInput";
 import { supabase } from "@/integrations/supabase/client";
-import { signInWithGoogleSmart } from "@/lib/nativeAuth";
 import { toast } from "sonner";
 import { isHardcodedAdminEmail, useAuth } from "@/contexts/AuthContext";
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 const REMEMBER_KEY = "hv_remember_me";
 
@@ -81,9 +82,32 @@ const Login = () => {
   };
 
   const google = async () => {
-    localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
-    const r = await signInWithGoogleSmart(`${window.location.origin}/auth/callback`);
-    if ((r as any)?.error) toast.error("Could not start Google sign in");
+    try {
+      localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
+      if (Capacitor.isNativePlatform()) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            skipBrowserRedirect: true,
+            redirectTo: 'com.highvault.futminna://auth/callback'
+          }
+        });
+        if (error) throw error;
+        if (data?.url) {
+          await Browser.open({ url: data.url });
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback` 
+          }
+        });
+        if (error) throw error;
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Google sign in failed');
+    }
   };
 
   return (

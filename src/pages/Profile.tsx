@@ -27,16 +27,20 @@ const Profile = () => {
   }, [theme]);
 
   useEffect(() => {
-    const loadFreshProfile = async () => {
-      const uid = session?.user?.id;
-      if (!uid) return;
+    const fetchProfile = async () => {
+      if (!session?.user?.id) return;
       setProfileLoading(true);
-      const { data } = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle();
-      setFreshProfile(data || null);
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .single();
+      if (data) setFreshProfile(data);
+      if (error) console.error("Profile fetch error:", error);
       setProfileLoading(false);
     };
-    loadFreshProfile();
-    const onFocus = () => loadFreshProfile();
+    fetchProfile();
+    const onFocus = () => fetchProfile();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [session?.user?.id]);

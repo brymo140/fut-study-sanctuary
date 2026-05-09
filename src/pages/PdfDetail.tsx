@@ -39,6 +39,8 @@ const PdfDetail = () => {
   const [viewChapter, setViewChapter] = useState<Chapter | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloadedChapterIds, setDownloadedChapterIds] = useState<Set<string>>(new Set());
+  const [downloadingChapter, setDownloadingChapter] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   // Tick to re-render when the in-memory unlock set changes.
   const [, setTick] = useState(0);
 
@@ -131,41 +133,67 @@ const PdfDetail = () => {
     setTick((t) => t + 1);
 
     const fileName = fileNameForChapter(ch);
-    const { data } = supabase.storage.from("chapters").getPublicUrl(ch.storage_path);
-    const localUri = await savePdfToDevice(data.publicUrl, fileName);
+    
+    // Show progress overlay
+    setDownloadProgress(0);
+    setDownloadingChapter(ch.id);
+    
+    try {
+      // 0% → 30% (fetching)
+      setDownloadProgress(30);
+      
+      const { data } = supabase.storage.from("chapters").getPublicUrl(ch.storage_path);
+      
+      // 30% → 70% (saving)
+      setDownloadProgress(70);
+      const localUri = await savePdfToDevice(data.publicUrl, fileName, (percent) => {
+        if (percent === 100) setDownloadProgress(100);
+      });
 
-    // Backup: store local file identifier so we can render quickly later.
-    localStorage.setItem(`${DL_PREFIX}${ch.id}`, fileName);
+      // Backup: store local file identifier so we can render quickly later.
+      localStorage.setItem(`${DL_PREFIX}${ch.id}`, fileName);
 
-    // Persist download state (for cross-device / refresh correctness).
-    const { error: dlErr } = await supabase.from("downloads").insert({
-      user_id: user.id,
-      chapter_id: ch.id,
-      pdf_id: id,
-      downloaded_at: new Date().toISOString(),
-    });
-    if (dlErr) {
-      console.error("[PdfDetail] downloads insert failed; retrying without downloaded_at", dlErr);
-      await supabase.from("downloads").insert({
+      // Persist download state (for cross-device / refresh correctness).
+      const { error: dlErr } = await supabase.from("downloads").insert({
         user_id: user.id,
         chapter_id: ch.id,
         pdf_id: id,
+        downloaded_at: new Date().toISOString(),
       });
-    }
+      if (dlErr) {
+        console.error("[PdfDetail] downloads insert failed; retrying without downloaded_at", dlErr);
+        await supabase.from("downloads").insert({
+          user_id: user.id,
+          chapter_id: ch.id,
+          pdf_id: id,
+        });
+      }
 
-    const { data: prof } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
-    await supabase.from("profiles").update({ xp: (prof?.xp || 0) + 10 }).eq("id", user.id);
-    refreshProfile();
+      const { data: prof } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
+      await supabase.from("profiles").update({ xp: (prof?.xp || 0) + 10 }).eq("id", user.id);
+      refreshProfile();
 
-    // Open the locally cached PDF (no Google viewer).
-    setDownloadedChapterIds((prev) => new Set([...prev, ch.id]));
-    const localDataUrl = await readPdfFromDevice(fileName);
-    if (localDataUrl) {
-      setViewChapter({ ...ch, storage_path: localDataUrl });
-    } else {
-      setViewChapter(ch);
+      // 70% → 100% (done)
+      setDownloadProgress(100);
+      setDownloadedChapterIds((prev) => new Set([...prev, ch.id]));
+      
+      setTimeout(() => {
+        setDownloadingChapter(null);
+        toast.success("✅ Saved to your library!");
+      }, 500);
+      
+      // Open the locally cached PDF (no Google viewer).
+      const localDataUrl = await readPdfFromDevice(fileName);
+      if (localDataUrl) {
+        setViewChapter({ ...ch, storage_path: localDataUrl });
+      } else {
+        setViewChapter(ch);
+      }
+    } catch (error) {
+      console.error('Download failed:', error);
+      setDownloadingChapter(null);
+      toast.error('Download failed. Please try again.');
     }
-    toast.success("Saved to your library");
   };
   const openRead = async (ch: Chapter) => {
     const cachedFileName = localStorage.getItem(`${DL_PREFIX}${ch.id}`) || fileNameForChapter(ch);
@@ -174,7 +202,17 @@ const PdfDetail = () => {
       setViewChapter({ ...ch, storage_path: local });
       return;
     }
-    setViewChapter(ch);
+    
+    // If not found locally, check if online and create signed URL
+    const { isOnline } = await import('@/lib/admob');
+    if (isOnline()) {
+      const { data } = supabase.storage.from("chapters").getPublicUrl(ch.storage_path);
+      // Open in Google Docs viewer
+      const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(data.publicUrl)}&embedded=true`;
+      setViewChapter({ ...ch, storage_path: googleViewerUrl });
+    } else {
+      toast.error("Download this PDF first to read offline");
+    }
   };
 
 
@@ -429,6 +467,31 @@ const PdfDetail = () => {
         storagePath={viewChapter?.storage_path ?? null}
         title={viewChapter ? `M${viewChapter.chapter_number} · ${viewChapter.title}` : undefined}
       />
+
+      {/* Download Progress Overlay */}
+      {downloadingChapter && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-md" />
+          <div className="relative w-full max-w-sm surface-elevated p-6 rounded-2xl animate-fade-in">
+            <div className="flex flex-col items-center py-4">
+              <div className="h-12 w-12 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4" />
+              <p className="text-sm font-semibold mb-2">Downloading module...</p>
+              <div className="w-full bg-muted rounded-full h-2 mb-2">
+                <div 
+                  className="bg-primary h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${downloadProgress}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground text-center">
+                {downloadProgress < 30 && "Preparing download..."}
+                {downloadProgress >= 30 && downloadProgress < 70 && "Fetching PDF..."}
+                {downloadProgress >= 70 && downloadProgress < 100 && "Saving to device..."}
+                {downloadProgress === 100 && "Almost done!"}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -83,6 +83,8 @@ const Signup = () => {
         department: form.department || null,
         faculty: form.faculty || null,
         matric_no: form.matric_no || null,
+        xp: 0,
+        streak: 0,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" }

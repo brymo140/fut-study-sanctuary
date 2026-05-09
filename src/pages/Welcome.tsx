@@ -1,11 +1,13 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
-import { signInWithGoogleSmart } from "@/lib/nativeAuth";
 import { toast } from "sonner";
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSettings } from "@/contexts/SettingsContext";
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
+import { supabase } from "@/integrations/supabase/client";
 
 const Welcome = () => {
   const navigate = useNavigate();
@@ -17,8 +19,31 @@ const Welcome = () => {
   }, [loading, session, navigate]);
 
   const handleGoogle = async () => {
-    const result = await signInWithGoogleSmart(`${window.location.origin}/auth/callback`);
-    if ((result as any)?.error) toast.error("Could not start Google sign in");
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            skipBrowserRedirect: true,
+            redirectTo: 'com.highvault.futminna://auth/callback'
+          }
+        });
+        if (error) throw error;
+        if (data?.url) {
+          await Browser.open({ url: data.url });
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback` 
+          }
+        });
+        if (error) throw error;
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Google sign in failed');
+    }
   };
 
   return (

@@ -12,10 +12,11 @@ import { toast } from "sonner";
 
 interface Chapter {
   id: string; title: string; chapter_number: number; storage_path: string;
+  file_size_mb?: number | null;
 }
 interface Subject {
   id: string; title: string; course_code: string; level: string; cover_url?: string | null;
-  is_general?: boolean; is_past_question?: boolean;
+  total_chapters?: number; is_past_question?: boolean;
 }
 interface SubjectGroup {
   subject: Subject;
@@ -50,39 +51,62 @@ const Downloads = () => {
   const load = async () => {
     if (!user) return;
     setLoading(true);
-    // Pull all download records for user; pivot to subjects + chapters list
-    const { data: dls } = await supabase
-      .from("downloads")
-      .select("chapter_id, pdf_id")
-      .eq("user_id", user.id);
-    const downloadedIds = new Set<string>(((dls as any[]) || []).map((d) => d.chapter_id).filter(Boolean));
-    const downloadedPdfIds = new Set<string>(((dls as any[]) || []).map((d) => d.pdf_id).filter(Boolean));
-    const subjectIds = Array.from(new Set(((dls as any[]) || []).map((d) => d.pdf_id)));
-
-    let subjects: Subject[] = [];
-    let chapters: Chapter[] = [];
-    if (subjectIds.length) {
-      const [{ data: subs }, { data: chs }] = await Promise.all([
-        supabase.from("pdfs").select("id,title,course_code,level,cover_url,is_general,is_past_question").in("id", subjectIds),
-        supabase.from("chapters").select("id,title,chapter_number,storage_path,pdf_id").in("pdf_id", subjectIds).order("chapter_number"),
-      ]);
-      subjects = (subs as Subject[]) || [];
-      chapters = (chs as any[]) || [];
-    }
+    
+    // Fetch downloads joined with chapters and pdfs as specified
+    const { data } = await supabase
+      .from('downloads')
+      .select(`
+        chapter_id,
+        downloaded_at,
+        chapters (
+          id,
+          title,
+          chapter_number,
+          storage_path,
+          file_size_mb,
+          pdf_id,
+          pdfs (
+            id,
+            title,
+            course_code,
+            level,
+            cover_url,
+            total_chapters,
+            is_past_question
+          )
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('downloaded_at', { ascending: false });
+    
+    // Process the data to group by pdf_id
+    const downloads = (data as any[]) || [];
+    const pdfMap = new Map<string, any>();
     const localPaths = loadLocalPaths();
-    const result: SubjectGroup[] = subjects.map((s) => ({
-      subject: s,
-      chapters: chapters.filter((c: any) => c.pdf_id === s.id),
-      downloadedChapterIds: new Set(
-        chapters
-          .filter((c: any) => c.pdf_id === s.id)
-          .map((c: any) => c.id)
-          .filter((cid: string) => downloadedIds.has(cid) || !!localStorage.getItem(`${DL_PREFIX}${cid}`))
-      ),
-      localPaths,
-    }));
+    
+    downloads.forEach((download: any) => {
+      const chapter = download.chapters;
+      const pdf = chapter?.pdfs;
+      if (!pdf) return;
+      
+      if (!pdfMap.has(pdf.id)) {
+        pdfMap.set(pdf.id, {
+          subject: pdf,
+          chapters: [],
+          downloadedChapterIds: new Set<string>(),
+          localPaths
+        });
+      }
+      
+      const group = pdfMap.get(pdf.id);
+      group.chapters.push(chapter);
+      group.downloadedChapterIds.add(chapter.id);
+    });
+    
+    const result = Array.from(pdfMap.values());
     setGroups(result);
 
+    // Also fetch bookmarks
     const { data: bm } = await supabase
       .from("bookmarks")
       .select("pdf:pdfs(id,title,course_code,level)")
@@ -170,7 +194,7 @@ const Downloads = () => {
         </div>
       ) : groups.length === 0 && bookmarks.length === 0 ? (
         <div className="surface-card p-10 text-center text-sm text-muted-foreground">
-          Your library is empty 📚<br/>Browse subjects and download your first module!
+          Your library is empty 📚<br/>Browse subjects to start reading!
         </div>
       ) : (
         <>
@@ -193,14 +217,13 @@ const Downloads = () => {
                     <p className="text-sm font-bold line-clamp-1">{g.subject.title}</p>
                     <p className="text-[11px] text-muted-foreground">
                       {g.subject.course_code} · <span className="badge-blue ml-0.5">{g.subject.level}</span>
-                      {g.subject.is_general && <span className="badge-purple ml-1">Single PDF</span>}
                       {g.subject.is_past_question && <span className="badge-amber ml-1">Past Q</span>}
                     </p>
                     <div className="flex items-center gap-2 mt-1.5">
                       <div className="flex-1 h-1 rounded-full bg-border overflow-hidden">
                         <div className="h-full bg-gradient-brand transition-all" style={{ width: `${total ? (downloaded/total)*100 : 0}%` }} />
                       </div>
-                      <span className="text-[10px] text-muted-foreground font-medium">{downloaded} of {total}</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">{downloaded} modules downloaded</span>
                     </div>
                   </div>
                 </button>
