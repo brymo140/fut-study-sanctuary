@@ -47,6 +47,29 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName
     return;
   }
 
+  // If storagePath is already a base64 data URL — use it directly
+  if (storagePath.startsWith('data:')) {
+    try {
+      const byteChars = atob(storagePath.split(',')[1]);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteArr[i] = byteChars.charCodeAt(i);
+      }
+      const blob = new Blob([byteArr], { type: 'application/pdf' });
+      const blobUrl = URL.createObjectURL(blob);
+      const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(blobUrl)}&embedded=true`;
+      setUrl(viewerUrl);
+      setLoading(false);
+      return;
+    } catch (e) {
+      console.error('[PdfViewer] base64 error:', e);
+      setError('Could not open PDF. Please try again.');
+      setLoading(false);
+      return;
+    }
+  }
+
+  // Otherwise use Supabase Storage signed URL
   if (isOffline) {
     setError('You are offline. Connect to internet to read this PDF.');
     setLoading(false);
@@ -54,17 +77,15 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName
   }
 
   try {
-    console.log('[PdfViewer] storagePath:', storagePath);
+    console.log('[PdfViewer] fetching signed URL for:', storagePath);
 
     const { data, error: signedUrlError } = await supabase.storage
       .from("chapters")
       .createSignedUrl(storagePath, 60 * 60);
 
-    console.log('[PdfViewer] signedUrl data:', data);
-    console.log('[PdfViewer] signedUrl error:', signedUrlError);
-
     if (signedUrlError) {
-      setError(`Storage error: ${signedUrlError.message}`);
+      console.error('[PdfViewer] signed URL error:', signedUrlError);
+      setError(`Could not load PDF: ${signedUrlError.message}`);
       setLoading(false);
       return;
     }
@@ -75,15 +96,12 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName
       return;
     }
 
-    console.log('[PdfViewer] signedUrl:', data.signedUrl);
-
     const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(data.signedUrl)}&embedded=true`;
-    console.log('[PdfViewer] viewerUrl:', viewerUrl);
     setUrl(viewerUrl);
 
   } catch (e: any) {
     console.error('[PdfViewer] error:', e);
-    setError(`Failed to load PDF: ${e?.message || 'Unknown error'}`);
+    setError('Failed to load PDF. Check your connection.');
   }
 
   setLoading(false);
