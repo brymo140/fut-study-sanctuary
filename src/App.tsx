@@ -77,26 +77,7 @@ const App = () => {
               <Route path="/" element={<Protected><Home /></Protected>} />
               <Route path="/browse" element={<Protected><Browse /></Protected>} />
               <Route path="/pdf/:id" element={<Protected><PdfDetail /></Protected>} />
-              <Route path="/watch" element={
-  <Protected>
-    <ErrorBoundary fallback={
-      <div className="p-8 text-center space-y-3">
-        <p className="text-4xl">📺</p>
-        <p className="text-sm text-muted-foreground">
-          Could not load Watch page. Please try again.
-        </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="text-xs text-primary underline"
-        >
-          Reload
-        </button>
-      </div>
-    }>
-      <Watch />
-    </ErrorBoundary>
-  </Protected>
-} />
+              <Route path="/watch" element={<Protected><Watch /></Protected>} />
               <Route path="/downloads" element={<Protected><Downloads /></Protected>} />
               <Route path="/profile" element={<Protected><Profile /></Protected>} />
               <Route path="/admin" element={<Protected><Admin /></Protected>} />
