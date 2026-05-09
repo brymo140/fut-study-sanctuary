@@ -34,7 +34,14 @@ interface YTResult {
 }
 
 const Watch = () => {
-  const openYouTube = (url: string) => { window.open(url, '_blank'); };
+  const openYouTube = async (url: string) => {
+  if (!url) return;
+  try {
+    window.open(url, '_blank');
+  } catch (e) {
+    console.error('YouTube open failed:', e);
+  }
+};
   const [level, setLevel] = useState("All");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
