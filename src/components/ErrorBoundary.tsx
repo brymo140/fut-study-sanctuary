@@ -1,10 +1,13 @@
-// Global error boundary — catches any unhandled render error and shows a
-// friendly recovery screen instead of a blank white crash.
 import { Component, ReactNode } from "react";
+
+interface Props {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
 
 interface State { hasError: boolean; }
 
-export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
+export class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };
 
   static getDerivedStateFromError() { return { hasError: true }; }
@@ -15,9 +18,12 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
 
   render() {
     if (!this.state.hasError) return this.props.children;
+
+    if (this.props.fallback) return this.props.fallback;
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center bg-background">
-        <div className="text-5xl mb-4">🍯🐝</div>
+        <div className="text-5xl mb-4">🐝</div>
         <h1 className="text-2xl font-bold mb-2">
           <span style={{ color: "#3b8bf5" }}>HIGH</span>
           <span style={{ color: "#9b5cf6" }}>VAULT</span> hit a snag
@@ -26,7 +32,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
           Something went wrong. Please refresh the app.
         </p>
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
           className="bg-gradient-button border border-primary/40 text-primary text-sm font-semibold rounded-xl px-5 py-2.5"
         >
           Refresh HighVault
