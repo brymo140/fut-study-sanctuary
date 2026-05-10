@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { X, Loader2, BookOpen, RefreshCw } from "lucide-react";
+import { X, Loader2, BookOpen, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -12,11 +12,14 @@ interface Props {
 }
 
 export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }: Props) => {
-  const [url, setUrl] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pageNum, setPageNum] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [reloadKey, setReloadKey] = useState(0);
+  const renderTaskRef = useRef<any>(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -31,83 +34,149 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
 
   useEffect(() => {
     if (!open) {
-      setUrl(null);
+      setPdfDoc(null);
+      setPageNum(1);
+      setTotalPages(0);
       setError(null);
       return;
     }
     loadPdf();
   }, [open, storagePath, chapterId]);
 
+  useEffect(() => {
+    if (pdfDoc && canvasRef.current) {
+      renderPage(pageNum);
+    }
+  }, [pdfDoc, pageNum]);
+
   const loadPdf = async () => {
     setLoading(true);
     setError(null);
+    setPdfDoc(null);
 
-    if (!storagePath) {
-      setError('No PDF available');
-      setLoading(false);
-      return;
-    }
+    try {
+      // Dynamically import PDF.js to keep bundle size manageable
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-    // Try reading from device cache first (works offline)
-    if (chapterId) {
-      const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
-      if (cachedFileName) {
-        try {
-          const { Filesystem, Directory } = await import('@capacitor/filesystem');
-          const result = await Filesystem.readFile({
-            path: `highvault/chapters/${cachedFileName}`,
-            directory: Directory.Cache
-          });
-          const base64 = result.data as string;
-          const byteChars = atob(base64);
-          const byteArr = new Uint8Array(byteChars.length);
-          for (let i = 0; i < byteChars.length; i++) {
-            byteArr[i] = byteChars.charCodeAt(i);
+      let pdfData: ArrayBuffer | null = null;
+
+      // Try device cache first (offline support)
+      if (chapterId) {
+        const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
+        if (cachedFileName) {
+          try {
+            const { Filesystem, Directory } = await import('@capacitor/filesystem');
+            const result = await Filesystem.readFile({
+              path: `highvault/chapters/${cachedFileName}`,
+              directory: Directory.Cache
+            });
+            const base64 = result.data as string;
+            const byteChars = atob(base64);
+            const byteArr = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) {
+              byteArr[i] = byteChars.charCodeAt(i);
+            }
+            pdfData = byteArr.buffer;
+            console.log('[PdfViewer] Loaded from device cache');
+          } catch (e) {
+            console.log('[PdfViewer] Cache miss, trying remote');
           }
-          const blob = new Blob([byteArr], { type: 'application/pdf' });
-          const blobUrl = URL.createObjectURL(blob);
-          setUrl(blobUrl);
-          setLoading(false);
-          return;
-        } catch (e) {
-          console.log('[PdfViewer] Cache miss, trying remote:', e);
         }
       }
-    }
 
-    // If offline and no cache found
-    if (isOffline) {
-      setError('You are offline. This PDF has not been downloaded yet.');
-      setLoading(false);
-      return;
-    }
-
-    // Online — create signed URL and use Google Docs viewer
-    try {
-      const { data, error: signedUrlError } = await supabase.storage
-        .from("chapters")
-        .createSignedUrl(storagePath, 60 * 60);
-
-      if (signedUrlError) {
-        setError(`Could not load PDF: ${signedUrlError.message}`);
+      // If no cache and offline — show error
+      if (!pdfData && isOffline) {
+        setError('You are offline. Download this PDF first to read offline.');
         setLoading(false);
         return;
       }
 
-      if (!data?.signedUrl) {
-        setError('Could not generate PDF link. Please try again.');
+      // Fetch from Supabase if no cache
+      if (!pdfData && storagePath) {
+        const { data, error: signedUrlError } = await supabase.storage
+          .from("chapters")
+          .createSignedUrl(storagePath, 60 * 60);
+
+        if (signedUrlError || !data?.signedUrl) {
+          setError('Could not load PDF. Please try again.');
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch(data.signedUrl);
+        if (!response.ok) {
+          setError('Failed to fetch PDF. Check your connection.');
+          setLoading(false);
+          return;
+        }
+        pdfData = await response.arrayBuffer();
+        console.log('[PdfViewer] Loaded from remote');
+      }
+
+      if (!pdfData) {
+        setError('No PDF data available.');
         setLoading(false);
         return;
       }
 
-      const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(data.signedUrl)}&embedded=true`;
-      setUrl(viewerUrl);
+      // Load PDF with PDF.js
+      const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+      const pdf = await loadingTask.promise;
+      setPdfDoc(pdf);
+      setTotalPages(pdf.numPages);
+      setPageNum(1);
 
     } catch (e: any) {
-      setError('Failed to load PDF. Check your connection.');
+      console.error('[PdfViewer] error:', e);
+      setError('Failed to load PDF. Please try again.');
     }
 
     setLoading(false);
+  };
+
+  const renderPage = async (num: number) => {
+    if (!pdfDoc || !canvasRef.current) return;
+
+    // Cancel any existing render task
+    if (renderTaskRef.current) {
+      renderTaskRef.current.cancel();
+    }
+
+    try {
+      const page = await pdfDoc.getPage(num);
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+
+      const containerWidth = canvas.parentElement?.clientWidth || window.innerWidth;
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = containerWidth / viewport.width;
+      const scaledViewport = page.getViewport({ scale });
+
+      canvas.height = scaledViewport.height;
+      canvas.width = scaledViewport.width;
+
+      const renderContext = {
+        canvasContext: context,
+        viewport: scaledViewport,
+      };
+
+      renderTaskRef.current = page.render(renderContext);
+      await renderTaskRef.current.promise;
+    } catch (e: any) {
+      if (e?.name !== 'RenderingCancelledException') {
+        console.error('[PdfViewer] render error:', e);
+      }
+    }
+  };
+
+  const goToPrevPage = () => {
+    if (pageNum > 1) setPageNum(p => p - 1);
+  };
+
+  const goToNextPage = () => {
+    if (pageNum < totalPages) setPageNum(p => p + 1);
   };
 
   // Block right click
@@ -133,7 +202,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           <div className="flex items-center gap-1">
             {!loading && !error && (
               <button
-                onClick={() => { setReloadKey(k => k + 1); loadPdf(); }}
+                onClick={loadPdf}
                 className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-surface-elevated"
               >
                 <RefreshCw className="h-4 w-4 text-muted-foreground" />
@@ -150,19 +219,19 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
 
         {/* Content */}
         <div
-          className="flex-1 min-h-0 bg-black select-none relative"
+          className="flex-1 min-h-0 overflow-y-auto bg-gray-900 select-none"
           onContextMenu={(e) => e.preventDefault()}
           style={{ WebkitTouchCallout: "none" } as any}
         >
           {loading && (
-            <div className="h-full w-full flex flex-col items-center justify-center gap-3 text-muted-foreground">
+            <div className="h-full w-full flex flex-col items-center justify-center gap-3 min-h-64">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm">Loading PDF...</p>
+              <p className="text-sm text-muted-foreground">Loading PDF...</p>
             </div>
           )}
 
           {!loading && error && (
-            <div className="h-full w-full flex flex-col items-center justify-center gap-3 px-6 text-center">
+            <div className="h-full w-full flex flex-col items-center justify-center gap-3 px-6 text-center min-h-64">
               <BookOpen className="h-12 w-12 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">{error}</p>
               <button
@@ -174,34 +243,40 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
             </div>
           )}
 
-          {!loading && !error && url && (
-            <div className="relative w-full h-full">
-              {url.startsWith('https://docs.google.com') && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    right: 0,
-                    width: '60px',
-                    height: '60px',
-                    background: 'black',
-                    zIndex: 999,
-                    pointerEvents: 'none'
-                  }}
-                />
-              )}
-              <iframe
-                key={reloadKey}
-                src={url}
-                title={title || "PDF"}
-                className="w-full h-full"
-                style={{ border: 0, display: 'block' }}
+          {!loading && !error && (
+            <div className="flex justify-center p-2">
+              <canvas
+                ref={canvasRef}
+                className="max-w-full shadow-lg"
+                style={{ display: totalPages > 0 ? 'block' : 'none' }}
                 onContextMenu={(e) => e.preventDefault()}
-                sandbox="allow-scripts allow-same-origin"
               />
             </div>
           )}
         </div>
+
+        {/* Page Navigation */}
+        {!loading && !error && totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-surface shrink-0">
+            <button
+              onClick={goToPrevPage}
+              disabled={pageNum <= 1}
+              className="h-8 w-8 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-surface-elevated"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="text-xs text-muted-foreground">
+              Page {pageNum} of {totalPages}
+            </span>
+            <button
+              onClick={goToNextPage}
+              disabled={pageNum >= totalPages}
+              className="h-8 w-8 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-surface-elevated"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
