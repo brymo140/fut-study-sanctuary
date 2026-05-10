@@ -57,7 +57,10 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     try {
       // Dynamically import PDF.js to keep bundle size manageable
       const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url
+        ).toString();
 
       let pdfData: ArrayBuffer | null = null;
 
@@ -72,12 +75,8 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
               directory: Directory.Cache
             });
             const base64 = result.data as string;
-            const byteChars = atob(base64);
-            const byteArr = new Uint8Array(byteChars.length);
-            for (let i = 0; i < byteChars.length; i++) {
-              byteArr[i] = byteChars.charCodeAt(i);
-            }
-            pdfData = byteArr.buffer;
+            const base64Response = await fetch(`data:application/pdf;base64,${base64}`);
+            pdfData = await base64Response.arrayBuffer();
             console.log('[PdfViewer] Loaded from device cache');
           } catch (e) {
             console.log('[PdfViewer] Cache miss, trying remote');
