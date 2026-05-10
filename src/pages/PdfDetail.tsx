@@ -514,7 +514,7 @@ const PdfDetail = () => {
               <p className="text-[11px] text-muted-foreground text-center">
                 {downloadProgress < 30 && "Preparing download..."}
                 {downloadProgress >= 30 && downloadProgress < 70 && "Fetching PDF..."}
-                {downloadProgress >= 70 && downloadProgress < 100 && "Saving to device..."}
+                {downloadProgress >= 70 && downloadProgress < 100 && "Saving..."}
                 {downloadProgress === 100 && "Almost done!"}
               </p>
             </div>
