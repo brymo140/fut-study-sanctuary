@@ -2,6 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Loader2, BookOpen, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Use local worker file — works offline
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 interface Props {
   open: boolean;
@@ -55,16 +62,9 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     setPdfDoc(null);
 
     try {
-      // Dynamically import PDF.js to keep bundle size manageable
-      const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-        'pdfjs-dist/build/pdf.worker.min.mjs',
-        import.meta.url
-        ).toString();
-
       let pdfData: ArrayBuffer | null = null;
 
-      // Try device cache first (offline support)
+      // Try device cache first (works offline)
       if (chapterId) {
         const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
         if (cachedFileName) {
@@ -75,24 +75,27 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
               directory: Directory.Cache
             });
             const base64 = result.data as string;
+            console.log('[PdfViewer] Cache hit, data length:', base64.length);
+            // Safe base64 to ArrayBuffer conversion
             const base64Response = await fetch(`data:application/pdf;base64,${base64}`);
             pdfData = await base64Response.arrayBuffer();
-            console.log('[PdfViewer] Loaded from device cache');
+            console.log('[PdfViewer] Loaded from device cache successfully');
           } catch (e) {
-            console.log('[PdfViewer] Cache miss, trying remote');
+            console.log('[PdfViewer] Cache miss:', e);
           }
         }
       }
 
-      // If no cache and offline — show error
+      // If offline and no cache
       if (!pdfData && isOffline) {
-        setError('You are offline. Download this PDF first to read offline.');
+        setError('You are offline. Download this PDF first to read it offline.');
         setLoading(false);
         return;
       }
 
       // Fetch from Supabase if no cache
       if (!pdfData && storagePath) {
+        console.log('[PdfViewer] Fetching from Supabase:', storagePath);
         const { data, error: signedUrlError } = await supabase.storage
           .from("chapters")
           .createSignedUrl(storagePath, 60 * 60);
@@ -110,7 +113,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           return;
         }
         pdfData = await response.arrayBuffer();
-        console.log('[PdfViewer] Loaded from remote');
+        console.log('[PdfViewer] Loaded from remote successfully');
       }
 
       if (!pdfData) {
@@ -119,7 +122,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
         return;
       }
 
-      // Load PDF with PDF.js
+      // Load with PDF.js
       const loadingTask = pdfjsLib.getDocument({ data: pdfData });
       const pdf = await loadingTask.promise;
       setPdfDoc(pdf);
@@ -137,9 +140,8 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
   const renderPage = async (num: number) => {
     if (!pdfDoc || !canvasRef.current) return;
 
-    // Cancel any existing render task
     if (renderTaskRef.current) {
-      renderTaskRef.current.cancel();
+      try { renderTaskRef.current.cancel(); } catch {}
     }
 
     try {
@@ -170,15 +172,6 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     }
   };
 
-  const goToPrevPage = () => {
-    if (pageNum > 1) setPageNum(p => p - 1);
-  };
-
-  const goToNextPage = () => {
-    if (pageNum < totalPages) setPageNum(p => p + 1);
-  };
-
-  // Block right click
   useEffect(() => {
     if (!open) return;
     const block = (e: Event) => e.preventDefault();
@@ -223,14 +216,14 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           style={{ WebkitTouchCallout: "none" } as any}
         >
           {loading && (
-            <div className="h-full w-full flex flex-col items-center justify-center gap-3 min-h-64">
+            <div className="min-h-64 flex flex-col items-center justify-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Loading PDF...</p>
             </div>
           )}
 
           {!loading && error && (
-            <div className="h-full w-full flex flex-col items-center justify-center gap-3 px-6 text-center min-h-64">
+            <div className="min-h-64 flex flex-col items-center justify-center gap-3 px-6 text-center">
               <BookOpen className="h-12 w-12 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">{error}</p>
               <button
@@ -258,7 +251,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
         {!loading && !error && totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-surface shrink-0">
             <button
-              onClick={goToPrevPage}
+              onClick={() => setPageNum(p => Math.max(1, p - 1))}
               disabled={pageNum <= 1}
               className="h-8 w-8 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-surface-elevated"
             >
@@ -268,7 +261,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
               Page {pageNum} of {totalPages}
             </span>
             <button
-              onClick={goToNextPage}
+              onClick={() => setPageNum(p => Math.min(totalPages, p + 1))}
               disabled={pageNum >= totalPages}
               className="h-8 w-8 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-surface-elevated"
             >
