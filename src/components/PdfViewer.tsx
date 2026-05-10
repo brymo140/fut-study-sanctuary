@@ -47,35 +47,41 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName
     return;
   }
 
-  // If storagePath is already a base64 data URL — use it directly
-  if (storagePath.startsWith('data:')) {
-    try {
-      const byteChars = atob(storagePath.split(',')[1]);
-      const byteArr = new Uint8Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) {
-        byteArr[i] = byteChars.charCodeAt(i);
+  // Try reading from device cache first (works offline)
+  if (chapterId) {
+    const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
+    if (cachedFileName) {
+      try {
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        const result = await Filesystem.readFile({
+          path: `highvault/chapters/${cachedFileName}`,
+          directory: Directory.Cache
+        });
+        const base64 = result.data as string;
+        const byteChars = atob(base64);
+        const byteArr = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          byteArr[i] = byteChars.charCodeAt(i);
+        }
+        const blob = new Blob([byteArr], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(blob);
+        setUrl(blobUrl);
+        setLoading(false);
+        return;
+      } catch (e) {
+        console.log('[PdfViewer] Cache miss, trying remote:', e);
       }
-      const blob = new Blob([byteArr], { type: 'application/pdf' });
-      const blobUrl = URL.createObjectURL(blob);
-      const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(blobUrl)}&embedded=true`;
-      setUrl(viewerUrl);
-      setLoading(false);
-      return;
-    } catch (e) {
-      console.error('[PdfViewer] base64 error:', e);
-      setError('Could not open PDF. Please try again.');
-      setLoading(false);
-      return;
     }
   }
 
-  // Otherwise use Supabase Storage signed URL
+  // If offline and no cache found
   if (isOffline) {
-    setError('You are offline. Connect to internet to read this PDF.');
+    setError('You are offline. This PDF has not been downloaded yet.');
     setLoading(false);
     return;
   }
 
+  // Online — create signed URL and use Google Docs viewer
   try {
     console.log('[PdfViewer] fetching signed URL for:', storagePath);
 
