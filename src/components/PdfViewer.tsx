@@ -1,20 +1,17 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { X, Loader2, BookOpen, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
-import { Filesystem, Directory } from "@capacitor/filesystem";
-import { Capacitor } from "@capacitor/core";
+import { X, Loader2, BookOpen, RefreshCw } from "lucide-react";
 
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   storagePath: string | null;
   chapterId?: string;
-  fileName?: string;
   title?: string;
 }
 
-export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName, title }: Props) => {
+export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }: Props) => {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,85 +30,85 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName
   }, []);
 
   useEffect(() => {
-    if (!open) { setUrl(null); setError(null); return; }
+    if (!open) {
+      setUrl(null);
+      setError(null);
+      return;
+    }
     loadPdf();
   }, [open, storagePath, chapterId]);
 
   const loadPdf = async () => {
-  setLoading(true);
-  setError(null);
+    setLoading(true);
+    setError(null);
 
-  if (!storagePath) {
-    setError('No PDF available');
-    setLoading(false);
-    return;
-  }
+    if (!storagePath) {
+      setError('No PDF available');
+      setLoading(false);
+      return;
+    }
 
-  // Try reading from device cache first (works offline)
-  if (chapterId) {
-    const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
-    if (cachedFileName) {
-      try {
-        const { Filesystem, Directory } = await import('@capacitor/filesystem');
-        const result = await Filesystem.readFile({
-          path: `highvault/chapters/${cachedFileName}`,
-          directory: Directory.Cache
-        });
-        const base64 = result.data as string;
-        const byteChars = atob(base64);
-        const byteArr = new Uint8Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteArr[i] = byteChars.charCodeAt(i);
+    // Try reading from device cache first (works offline)
+    if (chapterId) {
+      const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
+      if (cachedFileName) {
+        try {
+          const { Filesystem, Directory } = await import('@capacitor/filesystem');
+          const result = await Filesystem.readFile({
+            path: `highvault/chapters/${cachedFileName}`,
+            directory: Directory.Cache
+          });
+          const base64 = result.data as string;
+          const byteChars = atob(base64);
+          const byteArr = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) {
+            byteArr[i] = byteChars.charCodeAt(i);
+          }
+          const blob = new Blob([byteArr], { type: 'application/pdf' });
+          const blobUrl = URL.createObjectURL(blob);
+          setUrl(blobUrl);
+          setLoading(false);
+          return;
+        } catch (e) {
+          console.log('[PdfViewer] Cache miss, trying remote:', e);
         }
-        const blob = new Blob([byteArr], { type: 'application/pdf' });
-        const blobUrl = URL.createObjectURL(blob);
-        setUrl(blobUrl);
-        setLoading(false);
-        return;
-      } catch (e) {
-        console.log('[PdfViewer] Cache miss, trying remote:', e);
       }
     }
-  }
 
-  // If offline and no cache found
-  if (isOffline) {
-    setError('You are offline. This PDF has not been downloaded yet.');
+    // If offline and no cache found
+    if (isOffline) {
+      setError('You are offline. This PDF has not been downloaded yet.');
+      setLoading(false);
+      return;
+    }
+
+    // Online — create signed URL and use Google Docs viewer
+    try {
+      const { data, error: signedUrlError } = await supabase.storage
+        .from("chapters")
+        .createSignedUrl(storagePath, 60 * 60);
+
+      if (signedUrlError) {
+        setError(`Could not load PDF: ${signedUrlError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      if (!data?.signedUrl) {
+        setError('Could not generate PDF link. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(data.signedUrl)}&embedded=true`;
+      setUrl(viewerUrl);
+
+    } catch (e: any) {
+      setError('Failed to load PDF. Check your connection.');
+    }
+
     setLoading(false);
-    return;
-  }
-
-  // Online — create signed URL and use Google Docs viewer
-  try {
-    console.log('[PdfViewer] fetching signed URL for:', storagePath);
-
-    const { data, error: signedUrlError } = await supabase.storage
-      .from("chapters")
-      .createSignedUrl(storagePath, 60 * 60);
-
-    if (signedUrlError) {
-      console.error('[PdfViewer] signed URL error:', signedUrlError);
-      setError(`Could not load PDF: ${signedUrlError.message}`);
-      setLoading(false);
-      return;
-    }
-
-    if (!data?.signedUrl) {
-      setError('Could not generate PDF link. Please try again.');
-      setLoading(false);
-      return;
-    }
-
-    const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(data.signedUrl)}&embedded=true`;
-    setUrl(viewerUrl);
-
-  } catch (e: any) {
-    console.error('[PdfViewer] error:', e);
-    setError('Failed to load PDF. Check your connection.');
-  }
-
-  setLoading(false);
-};
+  };
 
   // Block right click
   useEffect(() => {
@@ -157,12 +154,14 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName
           onContextMenu={(e) => e.preventDefault()}
           style={{ WebkitTouchCallout: "none" } as any}
         >
-          {loading ? (
+          {loading && (
             <div className="h-full w-full flex flex-col items-center justify-center gap-3 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm">Loading PDF...</p>
             </div>
-          ) : error ? (
+          )}
+
+          {!loading && error && (
             <div className="h-full w-full flex flex-col items-center justify-center gap-3 px-6 text-center">
               <BookOpen className="h-12 w-12 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">{error}</p>
@@ -173,34 +172,35 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName
                 Try Again
               </button>
             </div>
-          ) {url ? (
-  <div className="relative w-full h-full">
-    {/* Cover external link button for Google Docs viewer */}
-    {url.startsWith('https://docs.google.com') && (
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          width: '60px',
-          height: '60px',
-          background: 'black',
-          zIndex: 999,
-          pointerEvents: 'none'
-        }}
-      />
-    )}
-    <iframe
-      key={reloadKey}
-      src={url}
-      title={title || "PDF"}
-      className="w-full h-full"
-      style={{ border: 0, display: 'block' }}
-      onContextMenu={(e) => e.preventDefault()}
-      sandbox="allow-scripts allow-same-origin"
-    />
-  </div>
-) : null}
+          )}
+
+          {!loading && !error && url && (
+            <div className="relative w-full h-full">
+              {url.startsWith('https://docs.google.com') && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    width: '60px',
+                    height: '60px',
+                    background: 'black',
+                    zIndex: 999,
+                    pointerEvents: 'none'
+                  }}
+                />
+              )}
+              <iframe
+                key={reloadKey}
+                src={url}
+                title={title || "PDF"}
+                className="w-full h-full"
+                style={{ border: 0, display: 'block' }}
+                onContextMenu={(e) => e.preventDefault()}
+                sandbox="allow-scripts allow-same-origin"
+              />
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
