@@ -173,32 +173,34 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, fileName
                 Try Again
               </button>
             </div>
-          ) : url ? (
-            <div className="relative w-full h-full">
-              {/* Cover external link button */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  width: '60px',
-                  height: '60px',
-                  background: '#000',
-                  zIndex: 999,
-                  pointerEvents: 'none'
-                }}
-              />
-              <iframe
-                key={reloadKey}
-                src={url}
-                title={title || "PDF"}
-                className="w-full h-full"
-                style={{ border: 0, display: 'block' }}
-                onContextMenu={(e) => e.preventDefault()}
-                sandbox="allow-scripts allow-same-origin"
-              />
-            </div>
-          ) : null}
+          ) {url ? (
+  <div className="relative w-full h-full">
+    {/* Cover external link button for Google Docs viewer */}
+    {url.startsWith('https://docs.google.com') && (
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: '60px',
+          height: '60px',
+          background: 'black',
+          zIndex: 999,
+          pointerEvents: 'none'
+        }}
+      />
+    )}
+    <iframe
+      key={reloadKey}
+      src={url}
+      title={title || "PDF"}
+      className="w-full h-full"
+      style={{ border: 0, display: 'block' }}
+      onContextMenu={(e) => e.preventDefault()}
+      sandbox="allow-scripts allow-same-origin"
+    />
+  </div>
+) : null}
         </div>
       </DialogContent>
     </Dialog>
