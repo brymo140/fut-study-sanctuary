@@ -2,13 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Loader2, BookOpen, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+
+// 1. Clean Import
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Use local worker file — works offline
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+// 2. Set worker to local public path for 100% offline support
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface Props {
   open: boolean;
@@ -64,36 +63,44 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     try {
       let pdfData: ArrayBuffer | null = null;
 
-      // Try device cache first (works offline)
+      // 3. Optimized Cache Logic with Existence Check
       if (chapterId) {
         const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
         if (cachedFileName) {
           try {
             const { Filesystem, Directory } = await import('@capacitor/filesystem');
+            
+            // Check if file actually exists on disk
+            const stat = await Filesystem.stat({
+              path: `highvault/chapters/${cachedFileName}`,
+              directory: Directory.Cache
+            });
+            console.log('[PdfViewer] File exists, size:', stat.size);
+
             const result = await Filesystem.readFile({
               path: `highvault/chapters/${cachedFileName}`,
               directory: Directory.Cache
             });
+
             const base64 = result.data as string;
-            console.log('[PdfViewer] Cache hit, data length:', base64.length);
-            // Safe base64 to ArrayBuffer conversion
+            // High-performance base64 to ArrayBuffer
             const base64Response = await fetch(`data:application/pdf;base64,${base64}`);
             pdfData = await base64Response.arrayBuffer();
+            
             console.log('[PdfViewer] Loaded from device cache successfully');
           } catch (e) {
-            console.log('[PdfViewer] Cache miss:', e);
+            console.log('[PdfViewer] Cache miss or error:', e);
           }
         }
       }
 
-      // If offline and no cache
       if (!pdfData && isOffline) {
         setError('You are offline. Download this PDF first to read it offline.');
         setLoading(false);
         return;
       }
 
-      // Fetch from Supabase if no cache
+      // 4. Remote Fetch (Supabase)
       if (!pdfData && storagePath) {
         console.log('[PdfViewer] Fetching from Supabase:', storagePath);
         const { data, error: signedUrlError } = await supabase.storage
@@ -122,7 +129,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
         return;
       }
 
-      // Load with PDF.js
+      // 5. Load with PDF.js (Uses the worker set at top of file)
       const loadingTask = pdfjsLib.getDocument({ data: pdfData });
       const pdf = await loadingTask.promise;
       setPdfDoc(pdf);
@@ -133,13 +140,11 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
       console.error('[PdfViewer] error:', e);
       setError('Failed to load PDF. Please try again.');
     }
-
     setLoading(false);
   };
 
   const renderPage = async (num: number) => {
     if (!pdfDoc || !canvasRef.current) return;
-
     if (renderTaskRef.current) {
       try { renderTaskRef.current.cancel(); } catch {}
     }
@@ -172,6 +177,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     }
   };
 
+  // Block right-click for protection
   useEffect(() => {
     if (!open) return;
     const block = (e: Event) => e.preventDefault();
@@ -181,55 +187,46 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
+      <DialogContent 
         className="max-w-none w-screen h-screen sm:rounded-none p-0 bg-background border-0 [&>button]:hidden flex flex-col"
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <BookOpen className="h-4 w-4 text-primary shrink-0" />
             <p className="text-sm font-semibold line-clamp-1">{title || "Reading"}</p>
           </div>
           <div className="flex items-center gap-1">
             {!loading && !error && (
-              <button
-                onClick={loadPdf}
-                className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-surface-elevated"
-              >
+              <button onClick={loadPdf} className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-accent" title="Reload">
                 <RefreshCw className="h-4 w-4 text-muted-foreground" />
               </button>
             )}
-            <button
-              onClick={() => onOpenChange(false)}
-              className="h-9 w-9 rounded-lg flex items-center justify-center hover:bg-surface-elevated"
-            >
+            <button onClick={() => onOpenChange(false)} className="h-9 w-9 rounded-lg flex items-center justify-center hover:bg-accent">
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        {/* Content */}
-        <div
-          className="flex-1 min-h-0 overflow-y-auto bg-gray-900 select-none"
-          onContextMenu={(e) => e.preventDefault()}
-          style={{ WebkitTouchCallout: "none" } as any}
+        {/* Content Area */}
+        <div 
+            className="flex-1 min-h-0 overflow-y-auto bg-slate-900 select-none" 
+            onContextMenu={(e) => e.preventDefault()}
+            style={{ WebkitTouchCallout: "none" } as any}
         >
           {loading && (
-            <div className="min-h-64 flex flex-col items-center justify-center gap-3">
+            <div className="min-h-[300px] h-full w-full flex flex-col items-center justify-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Loading PDF...</p>
             </div>
           )}
-
+          
           {!loading && error && (
-            <div className="min-h-64 flex flex-col items-center justify-center gap-3 px-6 text-center">
+            <div className="min-h-[300px] h-full w-full flex flex-col items-center justify-center gap-3 px-6 text-center">
               <BookOpen className="h-12 w-12 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">{error}</p>
-              <button
-                onClick={loadPdf}
-                className="px-4 py-2 bg-primary/10 border border-primary/40 text-primary text-sm rounded-lg"
-              >
+              <button onClick={loadPdf} className="mt-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-lg">
                 Try Again
               </button>
             </div>
@@ -237,35 +234,34 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
 
           {!loading && !error && (
             <div className="flex justify-center p-2">
-              <canvas
-                ref={canvasRef}
-                className="max-w-full shadow-lg"
+              <canvas 
+                ref={canvasRef} 
+                className="max-w-full shadow-2xl bg-white" 
                 style={{ display: totalPages > 0 ? 'block' : 'none' }}
-                onContextMenu={(e) => e.preventDefault()}
               />
             </div>
           )}
         </div>
 
-        {/* Page Navigation */}
+        {/* Footer Navigation */}
         {!loading && !error && totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-surface shrink-0">
-            <button
-              onClick={() => setPageNum(p => Math.max(1, p - 1))}
+          <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-card shrink-0">
+            <button 
+              onClick={() => setPageNum(p => Math.max(1, p - 1))} 
               disabled={pageNum <= 1}
-              className="h-8 w-8 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-surface-elevated"
+              className="h-10 w-10 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-accent"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <ChevronLeft className="h-6 w-6" />
             </button>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm font-medium">
               Page {pageNum} of {totalPages}
             </span>
-            <button
-              onClick={() => setPageNum(p => Math.min(totalPages, p + 1))}
+            <button 
+              onClick={() => setPageNum(p => Math.min(totalPages, p + 1))} 
               disabled={pageNum >= totalPages}
-              className="h-8 w-8 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-surface-elevated"
+              className="h-10 w-10 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-accent"
             >
-              <ChevronRight className="h-5 w-5" />
+              <ChevronRight className="h-6 w-6" />
             </button>
           </div>
         )}
