@@ -144,10 +144,8 @@ const PdfDetail = () => {
       setDownloadProgress(70);
 
       // Save to device
-      await savePdfToDevice(urlData.publicUrl, fileName);
-
-      // Save to localStorage - store the CHAPTER ID mapped to filename
-      localStorage.setItem(`${DL_PREFIX}${ch.id}`, fileName);
+      const safeFileName = await savePdfToDevice(urlData.publicUrl, fileName);
+      localStorage.setItem(`${DL_PREFIX}${ch.id}`, safeFileName);
 
       // Save to downloads table
       try {
