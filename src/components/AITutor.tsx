@@ -209,7 +209,7 @@ export const AITutor = () => {
                 </div>
                 <div>
                   <h2 className="font-semibold text-foreground">AI study assistant</h2>
-                  <p className="text-xs text-muted-foreground">Powered by Gemini · text or photo</p>
+                  <p className="text-xs text-muted-foreground">Powered by Groq · text or photo</p>
                 </div>
               </div>
               <div className="flex items-center gap-1">
