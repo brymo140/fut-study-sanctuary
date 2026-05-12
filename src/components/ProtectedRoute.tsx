@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { SplashLoader } from "@/components/SplashLoader";
@@ -6,27 +6,14 @@ import { SplashLoader } from "@/components/SplashLoader";
 export const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { session, loading } = useAuth();
   const location = useLocation();
-  const [offlineTimeout, setOfflineTimeout] = useState(false);
 
-  useEffect(() => {
-    // If offline and loading takes too long, show cached content
-    if (!navigator.onLine) {
-      const timer = setTimeout(() => setOfflineTimeout(true), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, []);
+  // Check if there's any Supabase session in localStorage
+  const hasLocalSession = Object.keys(localStorage).some(k => 
+    k.includes('sb-') && k.includes('-auth-token')
+  );
 
-  // If offline and we have a stored session indicator, show app
-  if (!navigator.onLine && offlineTimeout) {
-    const hasStoredSession = localStorage.getItem('supabase.auth.token') ||
-      Object.keys(localStorage).some(k => k.includes('supabase'));
-    if (hasStoredSession) {
-      return <>{children}</>;
-    }
-    return <Navigate to="/welcome" replace />;
-  }
-
-  if (loading && !offlineTimeout) {
+  // While loading — but if offline and we have a stored session, skip loading
+  if (loading && !hasLocalSession) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <SplashLoader label="Loading..." />
@@ -34,9 +21,11 @@ export const ProtectedRoute = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  if (!loading && !session) {
+  // No session and no stored session — go to welcome
+  if (!loading && !session && !hasLocalSession) {
     return <Navigate to="/welcome" state={{ from: location.pathname }} replace />;
   }
 
+  // Has session or stored session — show content
   return <>{children}</>;
 };
