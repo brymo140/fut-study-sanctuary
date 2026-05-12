@@ -87,7 +87,7 @@ const Welcome = () => {
           </div>
 
           <Button
-            onClick={handleGoogle}
+            onClick={() => toast.error("Google sign in is coming soon. Please use email and password.")}
             variant="outline"
             size="lg"
             className="w-full h-12 rounded-xl bg-surface hover:bg-surface-elevated border-border"
