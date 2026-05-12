@@ -33,38 +33,67 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsed = schema.safeParse(form);
-    if (!parsed.success) {
-      toast.error(parsed.error.errors[0].message);
-      return;
-    }
-    setLoading(true);
+  e.preventDefault();
+  const parsed = schema.safeParse(form);
+  if (!parsed.success) {
+    toast.error(parsed.error.errors[0].message);
+    return;
+  }
+  setLoading(true);
 
-    const { data: signupData, error } = await supabase.auth.signUp({
-      email: form.email.trim(),
-      password: form.password,
-      options: {
-        emailRedirectTo: `https://fut-study-sanctuary.lovable.app/auth/callback`,
-        data: {
-          full_name: form.full_name,
-          level: form.level,
-          department: form.department,
-          faculty: form.faculty,
-          matric_no: form.matric_no,
-        },
+  const { data: signupData, error } = await supabase.auth.signUp({
+    email: form.email.trim(),
+    password: form.password,
+    options: {
+      emailRedirectTo: `https://highvault-confirm.netlify.app/confirm.html`,
+      data: {
+        full_name: form.full_name,
+        level: form.level,
+        department: form.department,
+        faculty: form.faculty,
+        matric_no: form.matric_no,
       },
-    });
+    },
+  });
 
-    if (error) {
-      toast.error(
-        error.message.includes("already")
-          ? "Email already registered. Try logging in."
-          : error.message
-      );
-      setLoading(false);
-      return;
+  if (error) {
+    toast.error(
+      error.message.includes("already")
+        ? "Email already registered. Please log in instead."
+        : error.message
+    );
+    setLoading(false);
+    return;
+  }
+
+  const userId = signupData?.user?.id;
+
+  // Save profile details immediately
+  if (userId) {
+    const { error: profileError } = await supabase.from("profiles").upsert({
+      id: userId,
+      email: form.email.trim(),
+      full_name: form.full_name,
+      level: form.level as any,
+      department: form.department || null,
+      faculty: form.faculty || null,
+      matric_no: form.matric_no || null,
+      xp: 0,
+      streak: 0,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "id" });
+
+    if (profileError) {
+      console.error("Profile save error:", profileError.message);
     }
+  }
+
+  setLoading(false);
+
+  // Show success message and navigate to login
+  toast.success("Account created! Check your email to confirm then log in.");
+  navigate("/login");
+};
 
     const userId = signupData?.user?.id;
     if (!userId) {
