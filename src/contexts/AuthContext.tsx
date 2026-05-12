@@ -155,7 +155,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+          // If offline, check localStorage for existing session immediately
+      if (!navigator.onLine) {
+        const hasSession = Object.keys(localStorage).some(k => 
+          k.includes('sb-') && k.includes('-auth-token')
+        );
+        if (hasSession) {
+          setLoading(false);
+          // Still try to get session in background
+        }
+      }
+      
+      supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
