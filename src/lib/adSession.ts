@@ -26,7 +26,7 @@ class AdSessionManagerImpl {
   }
 
   private randomInterval() {
-    return Math.floor(Math.random() * 20 + 10) * 60 * 1000;
+    return Math.floor(Math.random() * 5 + 10) * 60 * 1000
   }
 
   subscribe(fn: Listener) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
