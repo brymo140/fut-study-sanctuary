@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
 import * as pdfjsLib from 'pdfjs-dist';
+import { AITutor } from "@/components/AITutor";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -257,6 +258,8 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
             </div>
           )}
         </div>
+        {/* AI Tutor accessible inside PDF */}
+          <AITutor />
       </DialogContent>
     </Dialog>
   );
