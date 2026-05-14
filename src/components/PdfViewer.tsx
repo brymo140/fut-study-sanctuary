@@ -16,7 +16,15 @@ interface Props {
 }
 
 // Single page component
-const PdfPage = ({ pdfDoc, pageNum, scale }: { pdfDoc: any; pageNum: number; scale: number }) => {
+const PdfPage = ({
+  pdfDoc,
+  pageNum,
+  scale,
+}: {
+  pdfDoc: any;
+  pageNum: number;
+  scale: number;
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
 
@@ -27,17 +35,24 @@ const PdfPage = ({ pdfDoc, pageNum, scale }: { pdfDoc: any; pageNum: number; sca
   const renderPage = async () => {
     if (!pdfDoc || !canvasRef.current) return;
     if (renderTaskRef.current) {
-      try { renderTaskRef.current.cancel(); } catch {}
+      try {
+        renderTaskRef.current.cancel();
+      } catch {}
     }
     try {
       const page = await pdfDoc.getPage(pageNum);
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
       if (!context) return;
+
       const viewport = page.getViewport({ scale });
       canvas.height = viewport.height;
       canvas.width = viewport.width;
-      renderTaskRef.current = page.render({ canvasContext: context, viewport });
+
+      renderTaskRef.current = page.render({
+        canvasContext: context,
+        viewport,
+      });
       await renderTaskRef.current.promise;
     } catch (e: any) {
       if (e?.name !== 'RenderingCancelledException') {
@@ -53,13 +68,48 @@ const PdfPage = ({ pdfDoc, pageNum, scale }: { pdfDoc: any; pageNum: number; sca
   );
 };
 
-export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }: Props) => {
+export const PdfViewer = ({
+  open,
+  onOpenChange,
+  storagePath,
+  chapterId,
+  title,
+}: Props) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(0);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [scale, setScale] = useState(1.0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  // Added references and handlers
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lastTouchDistance = useRef<number | null>(null);
+
+  const getTouchDistance = (touches: React.TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      lastTouchDistance.current = getTouchDistance(e.touches);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      const newDistance = getTouchDistance(e.touches);
+      const delta = newDistance - lastTouchDistance.current;
+      lastTouchDistance.current = newDistance;
+      setScale((s) => Math.min(3, Math.max(0.5, s + delta * 0.005)));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    lastTouchDistance.current = null;
+  };
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -87,35 +137,33 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     setLoading(true);
     setError(null);
     setPdfDoc(null);
-
     try {
       let pdfData: ArrayBuffer | null = null;
 
-      // Try device cache first
       if (chapterId) {
         const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
         if (cachedFileName && !cachedFileName.startsWith('data:')) {
           try {
-            const { Filesystem, Directory } = await import('@capacitor/filesystem');
-            
-            // Verify file exists
+            const { Filesystem, Directory } = await import(
+              '@capacitor/filesystem'
+            );
             const stat = await Filesystem.stat({
               path: `highvault/chapters/${cachedFileName}`,
-              directory: Directory.Cache
+              directory: Directory.Cache,
             });
             console.log('[PdfViewer] Cache hit, size:', stat.size);
-
             const result = await Filesystem.readFile({
               path: `highvault/chapters/${cachedFileName}`,
-              directory: Directory.Cache
+              directory: Directory.Cache,
             });
             const base64 = result.data as string;
-            const base64Response = await fetch(`data:application/pdf;base64,${base64}`);
+            const base64Response = await fetch(
+              `data:application/pdf;base64,${base64}`
+            );
             pdfData = await base64Response.arrayBuffer();
             console.log('[PdfViewer] Loaded from cache successfully');
           } catch (e) {
             console.log('[PdfViewer] Cache miss or corrupt:', e);
-            // Clear bad cache entry
             localStorage.removeItem(`hv_dl_${chapterId}`);
           }
         }
@@ -130,7 +178,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
       if (!pdfData && storagePath) {
         console.log('[PdfViewer] Fetching from Supabase storage');
         const { data, error: signedUrlError } = await supabase.storage
-          .from("chapters")
+          .from('chapters')
           .createSignedUrl(storagePath, 60 * 60);
 
         if (signedUrlError || !data?.signedUrl) {
@@ -159,20 +207,18 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
       const pdf = await loadingTask.promise;
       setPdfDoc(pdf);
       setTotalPages(pdf.numPages);
-
     } catch (e: any) {
       console.error('[PdfViewer] error:', e);
       setError('Failed to load PDF. Please try again.');
     }
-
     setLoading(false);
   };
 
   useEffect(() => {
     if (!open) return;
     const block = (e: Event) => e.preventDefault();
-    document.addEventListener("contextmenu", block);
-    return () => document.removeEventListener("contextmenu", block);
+    document.addEventListener('contextmenu', block);
+    return () => document.removeEventListener('contextmenu', block);
   }, [open]);
 
   return (
@@ -185,15 +231,23 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
         <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <BookOpen className="h-4 w-4 text-primary shrink-0" />
-            <p className="text-sm font-semibold line-clamp-1">{title || "Reading"}</p>
+            <p className="text-sm font-semibold line-clamp-1">
+              {title || 'Reading'}
+            </p>
           </div>
           <div className="flex items-center gap-1">
             {!loading && !error && (
-              <button onClick={loadPdf} className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-surface-elevated">
+              <button
+                onClick={loadPdf}
+                className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-surface-elevated"
+              >
                 <RefreshCw className="h-4 w-4 text-muted-foreground" />
               </button>
             )}
-            <button onClick={() => onOpenChange(false)} className="h-9 w-9 rounded-lg flex items-center justify-center hover:bg-surface-elevated">
+            <button
+              onClick={() => onOpenChange(false)}
+              className="h-9 w-9 rounded-lg flex items-center justify-center hover:bg-surface-elevated"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -203,7 +257,9 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
         {!loading && !error && totalPages > 0 && (
           <div className="flex items-center justify-center gap-3 py-2 bg-surface border-b border-border shrink-0">
             <button
-              onClick={() => setScale(s => Math.max(0.5, parseFloat((s - 0.25).toFixed(2))))}
+              onClick={() =>
+                setScale((s) => Math.max(0.5, parseFloat((s - 0.25).toFixed(2))))
+              }
               className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-surface-elevated border border-border"
             >
               <ZoomOut className="h-4 w-4" />
@@ -212,7 +268,9 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
               {Math.round(scale * 100)}%
             </span>
             <button
-              onClick={() => setScale(s => Math.min(3, parseFloat((s + 0.25).toFixed(2))))}
+              onClick={() =>
+                setScale((s) => Math.min(3, parseFloat((s + 0.25).toFixed(2))))
+              }
               className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-surface-elevated border border-border"
             >
               <ZoomIn className="h-4 w-4" />
@@ -224,11 +282,15 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           </div>
         )}
 
-        {/* Content */}
+        {/* Content Area */}
         <div
-          className="flex-1 min-h-0 overflow-y-auto bg-slate-900 select-none p-4"
+          className="flex-1 min-h-0 overflow-auto bg-slate-900 select-none p-4"
           onContextMenu={(e) => e.preventDefault()}
-          style={{ WebkitTouchCallout: "none" } as any}
+          style={{ WebkitTouchCallout: 'none' } as any}
+          ref={containerRef}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
           {loading && (
             <div className="min-h-64 flex flex-col items-center justify-center gap-3">
@@ -252,14 +314,21 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
 
           {!loading && !error && pdfDoc && (
             <div className="flex flex-col items-center">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(num => (
-                <PdfPage key={`${num}-${scale}`} pdfDoc={pdfDoc} pageNum={num} scale={scale} />
-              ))}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (num) => (
+                  <PdfPage
+                    key={`${num}-${scale}`}
+                    pdfDoc={pdfDoc}
+                    pageNum={num}
+                    scale={scale}
+                  />
+                )
+              )}
             </div>
           )}
         </div>
-        {/* AI Tutor accessible inside PDF */}
-          <AITutor />
+
+        <AITutor />
       </DialogContent>
     </Dialog>
   );
