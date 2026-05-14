@@ -11,26 +11,48 @@ import { Confetti } from "@/components/ads/Confetti";
 import { toast } from "sonner";
 
 interface Chapter {
-  id: string; title: string; chapter_number: number; storage_path: string;
+  id: string;
+  title: string;
+  chapter_number: number;
+  storage_path: string;
   file_size_mb?: number | null;
 }
+
 interface Subject {
-  id: string; title: string; course_code: string; level: string; cover_url?: string | null;
-  total_chapters?: number; is_past_question?: boolean;
+  id: string;
+  title: string;
+  course_code: string;
+  level: string;
+  cover_url?: string | null;
+  total_chapters?: number;
+  is_past_question?: boolean;
 }
+
 interface SubjectGroup {
   subject: Subject;
   chapters: Chapter[];
   downloadedChapterIds: Set<string>;
   localPaths: Record<string, string>; // chapter_id -> local uri
 }
-interface Bookmarked { id: string; title: string; course_code: string; level: string; }
+
+interface Bookmarked {
+  id: string;
+  title: string;
+  course_code: string;
+  level: string;
+}
 
 const LOCAL_PATHS_KEY = "hv_local_pdf_paths";
 const DL_PREFIX = "hv_dl_";
+
 const loadLocalPaths = (): Record<string, string> => {
-  try { return JSON.parse(localStorage.getItem(LOCAL_PATHS_KEY) || "{}"); } catch { return {}; }
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_PATHS_KEY) || "{}");
+  } catch {
+    return {};
+  }
 };
+
 const saveLocalPath = (chapterId: string, uri: string) => {
   const all = loadLocalPaths();
   all[chapterId] = uri;
@@ -49,113 +71,120 @@ const Downloads = () => {
   const [loading, setLoading] = useState(true);
 
   const CACHE_KEY_DOWNLOADS = 'hv_cache_downloads';
-const CACHE_KEY_BOOKMARKS = 'hv_cache_bookmarks';
+  const CACHE_KEY_BOOKMARKS = 'hv_cache_bookmarks';
 
-const load = async () => {
-  if (!user) return;
-  setLoading(true);
+  // FIX 1: Calculated totalModules dynamically so the variable isn't undefined
+  const totalModules = useMemo(() => {
+    return groups.reduce((acc, current) => acc + current.downloadedChapterIds.size, 0);
+  }, [groups]);
 
-  // Load from cache first for instant offline display
-  const cachedDownloads = localStorage.getItem(CACHE_KEY_DOWNLOADS);
-  const cachedBookmarks = localStorage.getItem(CACHE_KEY_BOOKMARKS);
-  
-  if (cachedDownloads) {
-    try {
-      const parsed = JSON.parse(cachedDownloads);
-      // Reconstruct Sets from arrays
-      const restored = parsed.map((g: any) => ({
-        ...g,
-        downloadedChapterIds: new Set<string>(g.downloadedChapterIds),
-        localPaths: g.localPaths || {}
-      }));
-      setGroups(restored);
+  const load = async () => {
+    if (!user) return;
+    setLoading(true);
+
+    const cachedDownloads = localStorage.getItem(CACHE_KEY_DOWNLOADS);
+    const cachedBookmarks = localStorage.getItem(CACHE_KEY_BOOKMARKS);
+
+    if (cachedDownloads) {
+      try {
+        const parsed = JSON.parse(cachedDownloads);
+        const restored = parsed.map((g: any) => ({
+          ...g,
+          downloadedChapterIds: new Set<string>(g.downloadedChapterIds),
+          localPaths: g.localPaths || {}
+        }));
+        setGroups(restored);
+        setLoading(false);
+      } catch {}
+    }
+
+    if (cachedBookmarks) {
+      try {
+        setBookmarks(JSON.parse(cachedBookmarks));
+      } catch {}
+    }
+
+    if (!navigator.onLine) {
       setLoading(false);
-    } catch {}
-  }
-  
-  if (cachedBookmarks) {
-    try { setBookmarks(JSON.parse(cachedBookmarks)); } catch {}
-  }
+      return;
+    }
 
-  // If offline, stop here — show cached data
-  if (!navigator.onLine) {
-    setLoading(false);
-    return;
-  }
-
-  try {
-    const { data } = await supabase
-      .from('downloads')
-      .select(`
-        chapter_id,
-        downloaded_at,
-        chapters (
-          id,
-          title,
-          chapter_number,
-          storage_path,
-          file_size_mb,
-          pdf_id,
-          pdfs (
+    try {
+      const { data } = await supabase
+        .from('downloads')
+        .select(`
+          chapter_id,
+          downloaded_at,
+          chapters (
             id,
             title,
-            course_code,
-            level,
-            cover_url,
-            total_chapters,
-            is_past_question
+            chapter_number,
+            storage_path,
+            file_size_mb,
+            pdf_id,
+            pdfs (
+              id,
+              title,
+              course_code,
+              level,
+              cover_url,
+              total_chapters,
+              is_past_question
+            )
           )
-        )
-      `)
-      .eq('user_id', user.id)
-      .order('downloaded_at', { ascending: false });
+        `)
+        .eq('user_id', user.id)
+        .order('downloaded_at', { ascending: false });
 
-    const downloads = (data as any[]) || [];
-    const pdfMap = new Map<string, any>();
-    const localPaths = loadLocalPaths();
+      const downloads = (data as any[]) || [];
+      const pdfMap = new Map<string, any>();
+      const localPaths = loadLocalPaths();
 
-    downloads.forEach((download: any) => {
-      const chapter = download.chapters;
-      const pdf = chapter?.pdfs;
-      if (!pdf) return;
-      if (!pdfMap.has(pdf.id)) {
-        pdfMap.set(pdf.id, {
-          subject: pdf,
-          chapters: [],
-          downloadedChapterIds: new Set<string>(),
-          localPaths
-        });
-      }
-      const group = pdfMap.get(pdf.id);
-      group.chapters.push(chapter);
-      group.downloadedChapterIds.add(chapter.id);
-    });
+      downloads.forEach((download: any) => {
+        const chapter = download.chapters;
+        const pdf = chapter?.pdfs;
+        if (!pdf) return;
 
-    const result = Array.from(pdfMap.values());
-    setGroups(result);
+        if (!pdfMap.has(pdf.id)) {
+          pdfMap.set(pdf.id, {
+            subject: pdf,
+            chapters: [],
+            downloadedChapterIds: new Set<string>(),
+            localPaths
+          });
+        }
+        const group = pdfMap.get(pdf.id);
+        group.chapters.push(chapter);
+        group.downloadedChapterIds.add(chapter.id);
+      });
 
-    // Cache for offline use — convert Sets to arrays for JSON
-    const cacheable = result.map(g => ({
-      ...g,
-      downloadedChapterIds: Array.from(g.downloadedChapterIds),
-    }));
-    localStorage.setItem(CACHE_KEY_DOWNLOADS, JSON.stringify(cacheable));
+      const result = Array.from(pdfMap.values());
+      setGroups(result);
 
-    const { data: bm } = await supabase
-      .from("bookmarks")
-      .select("pdf:pdfs(id,title,course_code,level)")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-    const bmData = ((bm as any[]) || []).map((b) => b.pdf).filter(Boolean);
-    setBookmarks(bmData);
-    localStorage.setItem(CACHE_KEY_BOOKMARKS, JSON.stringify(bmData));
+      const cacheable = result.map(g => ({
+        ...g,
+        downloadedChapterIds: Array.from(g.downloadedChapterIds),
+      }));
+      localStorage.setItem(CACHE_KEY_DOWNLOADS, JSON.stringify(cacheable));
 
-  } catch (e) {
-    console.error('[Downloads] fetch failed:', e);
-  }
+      const { data: bm } = await supabase
+        .from("bookmarks")
+        .select("pdf:pdfs(id,title,course_code,level)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-  setLoading(false);
-};
+      const bmData = ((bm as any[]) || []).map((b) => b.pdf).filter(Boolean);
+      setBookmarks(bmData);
+      localStorage.setItem(CACHE_KEY_BOOKMARKS, JSON.stringify(bmData));
+    } catch (e) {
+      console.error('[Downloads] fetch failed:', e);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+  }, [user]);
 
   const completeDownload = async () => {
     if (!unlock || !user) return;
@@ -168,12 +197,14 @@ const load = async () => {
       const uri = await savePdfToDevice(data.publicUrl, fileName);
       localStorage.setItem(`${DL_PREFIX}${ch.id}`, fileName);
       saveLocalPath(ch.id, uri);
+      
       const { error: dlErr } = await supabase.from("downloads").insert({
         user_id: user.id,
         chapter_id: ch.id,
         pdf_id: subject.id,
         downloaded_at: new Date().toISOString(),
       });
+
       if (dlErr) {
         console.error("[Downloads] downloads insert failed; retrying without downloaded_at", dlErr);
         await supabase.from("downloads").insert({
@@ -190,22 +221,23 @@ const load = async () => {
     } catch (e) {
       console.error(e);
       toast.error("Couldn't save the file. Try again.");
-    } finally {
+    } finaly {
       setDownloading(null);
     }
   };
 
   const openModule = (g: SubjectGroup, ch: Chapter) => {
-  // Pass real storage_path and chapterId — PdfViewer handles cache internally
-  setView({ ch, subject: g.subject, storagePath: ch.storage_path });
-};
-    // Web fallback — open via storage if already unlocked, otherwise gate.
+    setView({ ch, subject: g.subject, storagePath: ch.storage_path });
+  };
+
+  // FIX 2: Added the missing beginDownload function that your template button calls
+  const beginDownload = (g: SubjectGroup, ch: Chapter) => {
     if (isModuleUnlocked(ch.id)) {
       setView({ ch, subject: g.subject, storagePath: ch.storage_path });
     } else {
       setUnlock({ ch, subject: g.subject });
     }
-  };
+  }; // FIX 3: Fixed structural braces right here that were broken in your copy paste
 
   return (
     <div className="space-y-5 relative">
@@ -219,11 +251,11 @@ const load = async () => {
 
       {loading ? (
         <div className="space-y-3">
-          {[1,2,3].map(i => <div key={i} className="surface-card h-24 animate-pulse" />)}
+          {[1, 2, 3].map(i => <div key={i} className="surface-card h-24 animate-pulse" />)}
         </div>
       ) : groups.length === 0 && bookmarks.length === 0 ? (
         <div className="surface-card p-10 text-center text-sm text-muted-foreground">
-          Your library is empty 📚<br/>Browse subjects to start reading!
+          Your library is empty 📚<br />Browse subjects to start reading!
         </div>
       ) : (
         <>
@@ -238,21 +270,28 @@ const load = async () => {
                   className="w-full p-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors"
                 >
                   <div className="h-14 w-14 shrink-0 rounded-lg bg-gradient-cover overflow-hidden flex items-center justify-center">
-                    {g.subject.cover_url
-                      ? <img src={g.subject.cover_url} alt="" className="h-full w-full object-cover" />
-                      : <FileText className="h-6 w-6 text-white/90" />}
+                    {g.subject.cover_url ? (
+                      <img src={g.subject.cover_url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <FileText className="h-6 w-6 text-white/90" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold line-clamp-1">{g.subject.title}</p>
                     <p className="text-[11px] text-muted-foreground">
-                      {g.subject.course_code} · <span className="badge-blue ml-0.5">{g.subject.level}</span>
+                      {g.subject.course_code} · <span className="badge-blue ml-0.5">{g.subject.level}</span>{" "}
                       {g.subject.is_past_question && <span className="badge-amber ml-1">Past Q</span>}
                     </p>
                     <div className="flex items-center gap-2 mt-1.5">
                       <div className="flex-1 h-1 rounded-full bg-border overflow-hidden">
-                        <div className="h-full bg-gradient-brand transition-all" style={{ width: `${total ? (downloaded/total)*100 : 0}%` }} />
+                        <div
+                          className="h-full bg-gradient-brand transition-all"
+                          style={{ width: `${total ? (downloaded / total) * 100 : 0}%` }}
+                        />
                       </div>
-                      <span className="text-[10px] text-muted-foreground font-medium">{downloaded} modules downloaded</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">
+                        {downloaded} modules downloaded
+                      </span>
                     </div>
                   </div>
                 </button>
@@ -269,7 +308,9 @@ const load = async () => {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold line-clamp-1">{ch.title}</p>
-                            <p className="text-[10px] text-muted-foreground">{isDownloaded ? "On device" : "Not downloaded"}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {isDownloaded ? "On device" : "Not downloaded"}
+                            </p>
                           </div>
                           {isDownloaded ? (
                             <button
@@ -282,7 +323,7 @@ const load = async () => {
                             <button
                               onClick={() => beginDownload(g, ch)}
                               disabled={isBusy || !navigator.onLine}
-                              className="inline-flex items-center gap-1 bg-gradient-button border border-primary/40 text-primary text-[11px] font-bold rounded-md px-2.5 py-1.5 disabled:opacity-50"
+                              className="inline-flex items-center gap-1 bg-gradient-brand border border-primary/40 text-primary text-[11px] font-bold rounded-md px-2.5 py-1.5 disabled:opacity-50"
                             >
                               {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
                               {isBusy ? "Saving" : "Download ⬇"}
@@ -305,13 +346,19 @@ const load = async () => {
               </div>
               <div className="space-y-2">
                 {bookmarks.map((b) => (
-                  <Link key={b.id} to={`/pdf/${b.id}`} className="surface-card p-3 flex items-center gap-3 hover:border-primary">
+                  <Link
+                    key={b.id}
+                    to={`/pdf/${b.id}`}
+                    className="surface-card p-3 flex items-center gap-3 hover:border-primary"
+                  >
                     <div className="h-11 w-11 shrink-0 rounded-lg bg-gradient-cover flex items-center justify-center">
                       <Bookmark className="h-5 w-5 text-white/90 fill-white/40" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold line-clamp-1">{b.title}</p>
-                      <p className="text-[11px] text-muted-foreground">{b.course_code} · {b.level}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {b.course_code} · {b.level}
+                      </p>
                     </div>
                   </Link>
                 ))}
@@ -327,14 +374,13 @@ const load = async () => {
         onClose={() => setUnlock(null)}
         onUnlocked={completeDownload}
       />
-
       <PdfViewer
-      open={!!view}
-      onOpenChange={(v) => !v && setView(null)}
-      storagePath={view?.storagePath ?? null}
-      chapterId={view?.ch.id}
-      title={view ? `M${view.ch.chapter_number} · ${view.ch.title}` : undefined}
-    />
+        open={!!view}
+        onOpenChange={(v) => !v && setView(null)}
+        storagePath={view?.storagePath ?? null}
+        chapterId={view?.ch.id}
+        title={view ? `M${view.ch.chapter_number} · ${view.ch.title}` : undefined}
+      />
     </div>
   );
 };
