@@ -195,7 +195,7 @@ const load = async () => {
     }
   };
 
-  cconst openModule = (g: SubjectGroup, ch: Chapter) => {
+  const openModule = (g: SubjectGroup, ch: Chapter) => {
   // Pass real storage_path and chapterId — PdfViewer handles cache internally
   setView({ ch, subject: g.subject, storagePath: ch.storage_path });
 };
