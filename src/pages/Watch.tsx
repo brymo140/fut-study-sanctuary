@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { Play, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { AdMobBannerSlot } from "@/components/ads/AdMobBannerSlot";
 
 const YT_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
+{/* Banner ad */}
+{!searchQuery && <AdMobBannerSlot />}
 
 interface Channel {
   id: string;
