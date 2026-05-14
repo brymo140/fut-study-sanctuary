@@ -48,11 +48,42 @@ const Downloads = () => {
   const [confetti, setConfetti] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
-    if (!user) return;
-    setLoading(true);
-    
-    // Fetch downloads joined with chapters and pdfs as specified
+  const CACHE_KEY_DOWNLOADS = 'hv_cache_downloads';
+const CACHE_KEY_BOOKMARKS = 'hv_cache_bookmarks';
+
+const load = async () => {
+  if (!user) return;
+  setLoading(true);
+
+  // Load from cache first for instant offline display
+  const cachedDownloads = localStorage.getItem(CACHE_KEY_DOWNLOADS);
+  const cachedBookmarks = localStorage.getItem(CACHE_KEY_BOOKMARKS);
+  
+  if (cachedDownloads) {
+    try {
+      const parsed = JSON.parse(cachedDownloads);
+      // Reconstruct Sets from arrays
+      const restored = parsed.map((g: any) => ({
+        ...g,
+        downloadedChapterIds: new Set<string>(g.downloadedChapterIds),
+        localPaths: g.localPaths || {}
+      }));
+      setGroups(restored);
+      setLoading(false);
+    } catch {}
+  }
+  
+  if (cachedBookmarks) {
+    try { setBookmarks(JSON.parse(cachedBookmarks)); } catch {}
+  }
+
+  // If offline, stop here — show cached data
+  if (!navigator.onLine) {
+    setLoading(false);
+    return;
+  }
+
+  try {
     const { data } = await supabase
       .from('downloads')
       .select(`
@@ -78,17 +109,15 @@ const Downloads = () => {
       `)
       .eq('user_id', user.id)
       .order('downloaded_at', { ascending: false });
-    
-    // Process the data to group by pdf_id
+
     const downloads = (data as any[]) || [];
     const pdfMap = new Map<string, any>();
     const localPaths = loadLocalPaths();
-    
+
     downloads.forEach((download: any) => {
       const chapter = download.chapters;
       const pdf = chapter?.pdfs;
       if (!pdf) return;
-      
       if (!pdfMap.has(pdf.id)) {
         pdfMap.set(pdf.id, {
           subject: pdf,
@@ -97,32 +126,36 @@ const Downloads = () => {
           localPaths
         });
       }
-      
       const group = pdfMap.get(pdf.id);
       group.chapters.push(chapter);
       group.downloadedChapterIds.add(chapter.id);
     });
-    
+
     const result = Array.from(pdfMap.values());
     setGroups(result);
 
-    // Also fetch bookmarks
+    // Cache for offline use — convert Sets to arrays for JSON
+    const cacheable = result.map(g => ({
+      ...g,
+      downloadedChapterIds: Array.from(g.downloadedChapterIds),
+    }));
+    localStorage.setItem(CACHE_KEY_DOWNLOADS, JSON.stringify(cacheable));
+
     const { data: bm } = await supabase
       .from("bookmarks")
       .select("pdf:pdfs(id,title,course_code,level)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
-    setBookmarks(((bm as any[]) || []).map((b) => b.pdf).filter(Boolean));
-    setLoading(false);
-  };
+    const bmData = ((bm as any[]) || []).map((b) => b.pdf).filter(Boolean);
+    setBookmarks(bmData);
+    localStorage.setItem(CACHE_KEY_BOOKMARKS, JSON.stringify(bmData));
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [user?.id]);
+  } catch (e) {
+    console.error('[Downloads] fetch failed:', e);
+  }
 
-  const totalModules = useMemo(() => groups.reduce((n, g) => n + g.downloadedChapterIds.size, 0), [groups]);
-
-  const beginDownload = (g: SubjectGroup, ch: Chapter) => {
-    setUnlock({ ch, subject: g.subject });
-  };
+  setLoading(false);
+};
 
   const completeDownload = async () => {
     if (!unlock || !user) return;
@@ -300,11 +333,12 @@ const Downloads = () => {
       />
 
       <PdfViewer
-        open={!!view}
-        onOpenChange={(v) => !v && setView(null)}
-        storagePath={view?.storagePath ?? null}
-        title={view ? `M${view.ch.chapter_number} · ${view.ch.title}` : undefined}
-      />
+      open={!!view}
+      onOpenChange={(v) => !v && setView(null)}
+      storagePath={view?.storagePath ?? null}
+      chapterId={view?.ch.id}
+      title={view ? `M${view.ch.chapter_number} · ${view.ch.title}` : undefined}
+    />
     </div>
   );
 };
