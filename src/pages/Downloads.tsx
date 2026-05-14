@@ -195,14 +195,10 @@ const load = async () => {
     }
   };
 
-  const openModule = async (g: SubjectGroup, ch: Chapter) => {
-    // Try local first (no ad)
-    const storedName = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
-    const local = await readPdfFromDevice(storedName || `${g.subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`);
-    if (local) {
-      setView({ ch, subject: g.subject, storagePath: local });
-      return;
-    }
+  cconst openModule = (g: SubjectGroup, ch: Chapter) => {
+  // Pass real storage_path and chapterId — PdfViewer handles cache internally
+  setView({ ch, subject: g.subject, storagePath: ch.storage_path });
+};
     // Web fallback — open via storage if already unlocked, otherwise gate.
     if (isModuleUnlocked(ch.id)) {
       setView({ ch, subject: g.subject, storagePath: ch.storage_path });
