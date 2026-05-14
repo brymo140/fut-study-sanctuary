@@ -73,7 +73,6 @@ const Downloads = () => {
   const CACHE_KEY_DOWNLOADS = 'hv_cache_downloads';
   const CACHE_KEY_BOOKMARKS = 'hv_cache_bookmarks';
 
-  // FIX 1: Calculated totalModules dynamically so the variable isn't undefined
   const totalModules = useMemo(() => {
     return groups.reduce((acc, current) => acc + current.downloadedChapterIds.size, 0);
   }, [groups]);
@@ -221,7 +220,8 @@ const Downloads = () => {
     } catch (e) {
       console.error(e);
       toast.error("Couldn't save the file. Try again.");
-    } finaly {
+    } finally {
+      // FIXED: Corrected spelling to "finally"
       setDownloading(null);
     }
   };
@@ -230,14 +230,13 @@ const Downloads = () => {
     setView({ ch, subject: g.subject, storagePath: ch.storage_path });
   };
 
-  // FIX 2: Added the missing beginDownload function that your template button calls
   const beginDownload = (g: SubjectGroup, ch: Chapter) => {
     if (isModuleUnlocked(ch.id)) {
       setView({ ch, subject: g.subject, storagePath: ch.storage_path });
     } else {
       setUnlock({ ch, subject: g.subject });
     }
-  }; // FIX 3: Fixed structural braces right here that were broken in your copy paste
+  };
 
   return (
     <div className="space-y-5 relative">
