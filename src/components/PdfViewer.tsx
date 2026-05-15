@@ -2,10 +2,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
-import * as pdfjsLib from 'pdfjs-dist';
 import { AITutor } from "@/components/AITutor";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface Props {
   open: boolean;
@@ -31,35 +29,30 @@ const PdfPage = ({
   useEffect(() => {
     renderPage();
   }, [pdfDoc, pageNum, scale]);
-
-  const renderPage = async () => {
-    if (!pdfDoc || !canvasRef.current) return;
-    if (renderTaskRef.current) {
-      try {
-        renderTaskRef.current.cancel();
-      } catch {}
+const renderPage = async (num: number) => {
+  if (!pdfDoc || !canvasRef.current) return;
+  if (renderTaskRef.current) {
+    try { renderTaskRef.current.cancel(); } catch {}
+  }
+  try {
+    const page = await pdfDoc.getPage(num);
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    const containerWidth = canvas.parentElement?.clientWidth || window.innerWidth;
+    const viewport = page.getViewport({ scale: 1 });
+    const scale2 = (containerWidth / viewport.width) * scale;
+    const scaledViewport = page.getViewport({ scale: scale2 });
+    canvas.height = scaledViewport.height;
+    canvas.width = scaledViewport.width;
+    renderTaskRef.current = page.render({ canvasContext: context, viewport: scaledViewport });
+    await renderTaskRef.current.promise;
+  } catch (e: any) {
+    if (e?.name !== 'RenderingCancelledException') {
+      console.error('[PdfViewer] render error:', e);
     }
-    try {
-      const page = await pdfDoc.getPage(pageNum);
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      if (!context) return;
-
-      const viewport = page.getViewport({ scale });
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      renderTaskRef.current = page.render({
-        canvasContext: context,
-        viewport,
-      });
-      await renderTaskRef.current.promise;
-    } catch (e: any) {
-      if (e?.name !== 'RenderingCancelledException') {
-        console.error('[PdfPage] render error:', e);
-      }
-    }
-  };
+  }
+};
 
   return (
     <div className="shadow-lg mb-4 bg-white">
@@ -138,81 +131,81 @@ export const PdfViewer = ({
     setError(null);
     setPdfDoc(null);
     try {
-      let pdfData: ArrayBuffer | null = null;
+  // Lazy load PDF.js only when needed — prevents blocking app startup
+  const pdfjsLib = await import('pdfjs-dist');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
-      if (chapterId) {
-        const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
-        if (cachedFileName && !cachedFileName.startsWith('data:')) {
-          try {
-            const { Filesystem, Directory } = await import(
-              '@capacitor/filesystem'
-            );
-            const stat = await Filesystem.stat({
-              path: `highvault/chapters/${cachedFileName}`,
-              directory: Directory.Cache,
-            });
-            console.log('[PdfViewer] Cache hit, size:', stat.size);
-            const result = await Filesystem.readFile({
-              path: `highvault/chapters/${cachedFileName}`,
-              directory: Directory.Cache,
-            });
-            const base64 = result.data as string;
-            const base64Response = await fetch(
-              `data:application/pdf;base64,${base64}`
-            );
-            pdfData = await base64Response.arrayBuffer();
-            console.log('[PdfViewer] Loaded from cache successfully');
-          } catch (e) {
-            console.log('[PdfViewer] Cache miss or corrupt:', e);
-            localStorage.removeItem(`hv_dl_${chapterId}`);
-          }
-        }
+  let pdfData: ArrayBuffer | null = null;
+
+  // Try device cache first
+  if (chapterId) {
+    const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
+    if (cachedFileName && !cachedFileName.startsWith('data:')) {
+      try {
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        const stat = await Filesystem.stat({
+          path: `highvault/chapters/${cachedFileName}`,
+          directory: Directory.Cache
+        });
+        console.log('[PdfViewer] Cache hit, size:', stat.size);
+        const result = await Filesystem.readFile({
+          path: `highvault/chapters/${cachedFileName}`,
+          directory: Directory.Cache
+        });
+        const base64 = result.data as string;
+        const base64Response = await fetch(`data:application/pdf;base64,${base64}`);
+        pdfData = await base64Response.arrayBuffer();
+        console.log('[PdfViewer] Loaded from cache');
+      } catch (e) {
+        console.log('[PdfViewer] Cache miss:', e);
+        localStorage.removeItem(`hv_dl_${chapterId}`);
       }
-
-      if (!pdfData && isOffline) {
-        setError('You are offline. Download this PDF first to read offline.');
-        setLoading(false);
-        return;
-      }
-
-      if (!pdfData && storagePath) {
-        console.log('[PdfViewer] Fetching from Supabase storage');
-        const { data, error: signedUrlError } = await supabase.storage
-          .from('chapters')
-          .createSignedUrl(storagePath, 60 * 60);
-
-        if (signedUrlError || !data?.signedUrl) {
-          setError('Could not load PDF. Please try again.');
-          setLoading(false);
-          return;
-        }
-
-        const response = await fetch(data.signedUrl);
-        if (!response.ok) {
-          setError('Failed to fetch PDF. Check your connection.');
-          setLoading(false);
-          return;
-        }
-        pdfData = await response.arrayBuffer();
-        console.log('[PdfViewer] Loaded from remote successfully');
-      }
-
-      if (!pdfData) {
-        setError('No PDF data available.');
-        setLoading(false);
-        return;
-      }
-
-      const loadingTask = pdfjsLib.getDocument({ data: pdfData });
-      const pdf = await loadingTask.promise;
-      setPdfDoc(pdf);
-      setTotalPages(pdf.numPages);
-    } catch (e: any) {
-      console.error('[PdfViewer] error:', e);
-      setError('Failed to load PDF. Please try again.');
     }
+  }
+
+  if (!pdfData && isOffline) {
+    setError('You are offline. Download this PDF first to read offline.');
     setLoading(false);
-  };
+    return;
+  }
+
+  if (!pdfData && storagePath) {
+    console.log('[PdfViewer] Fetching from Supabase');
+    const { data, error: signedUrlError } = await supabase.storage
+      .from("chapters")
+      .createSignedUrl(storagePath, 60 * 60);
+
+    if (signedUrlError || !data?.signedUrl) {
+      setError('Could not load PDF. Please try again.');
+      setLoading(false);
+      return;
+    }
+
+    const response = await fetch(data.signedUrl);
+    if (!response.ok) {
+      setError('Failed to fetch PDF. Check your connection.');
+      setLoading(false);
+      return;
+    }
+    pdfData = await response.arrayBuffer();
+    console.log('[PdfViewer] Loaded from remote');
+  }
+
+  if (!pdfData) {
+    setError('No PDF data available.');
+    setLoading(false);
+    return;
+  }
+
+  const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+  const pdf = await loadingTask.promise;
+  setPdfDoc(pdf);
+  setTotalPages(pdf.numPages);
+
+} catch (e: any) {
+  console.error('[PdfViewer] error:', e);
+  setError('Failed to load PDF. Please try again.');
+}
 
   useEffect(() => {
     if (!open) return;
