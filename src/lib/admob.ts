@@ -28,7 +28,8 @@ export const AD_UNITS = {
   banner: "ca-app-pub-3940256099942544/6300978111",
   interstitial: "ca-app-pub-3940256099942544/1033173712",
   rewarded: "ca-app-pub-3940256099942544/5224354917",
-  rewardedInterstitial: "ca-app-pub-3940256099942544/5354046379",
+  rewardedInterstitial: "ca-app-pub-4988426041877845/8529692908",
+  appOpen: "ca-app-pub-4988426041877845/9820769449",
 };
 
 // Reads the live AdMob App ID from the app_settings table so admin changes
@@ -132,6 +133,24 @@ export const showInterstitial = async (): Promise<boolean> => {
     return true;
   } catch (e) {
     console.warn("AdMob interstitial failed", e);
+    return false;
+  }
+};
+
+// ---------- APP OPEN ----------
+export const showAppOpenAd = async (): Promise<boolean> => {
+  if (!isOnline()) return false;
+  if (!isNative()) return true;
+  await initAdMob();
+  try {
+    await AdMob.prepareRewardVideoAd({
+      adId: AD_UNITS.appOpen,
+      isTesting: true,
+    });
+    await AdMob.showRewardVideoAd();
+    return true;
+  } catch (e) {
+    console.warn("App open ad failed", e);
     return false;
   }
 };
