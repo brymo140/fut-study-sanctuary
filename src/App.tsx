@@ -12,6 +12,7 @@ import { MaintenanceGate } from "@/components/MaintenanceGate";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SplashLoader } from "@/components/SplashLoader";
+import { showAppOpenAd } from "@/lib/admob";
 
 import Welcome from "./pages/Welcome";
 import Signup from "./pages/Signup";
@@ -44,6 +45,10 @@ const App = () => {
   const [booting, setBooting] = useState(true);
 
   useEffect(() => {
+    // Show app open ad when app starts
+if (navigator.onLine) {
+  setTimeout(() => showAppOpenAd(), 2000);
+}
     // Clear corrupted localStorage PDF cache entries
 // Remove entries that contain base64 data instead of filenames
 Object.keys(localStorage).forEach(key => {
