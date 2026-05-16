@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { isOnline } from "@/lib/admob";
+import { isOnline, showRewardedAd } from "@/lib/admob";
 import { toast } from "sonner";
 
 export const useRewardedYouTubeOpener = () => {
@@ -14,9 +14,12 @@ export const useRewardedYouTubeOpener = () => {
     }
 
     try {
-      // Open YouTube directly without requiring ad for now
-      // Ad gate can be re-enabled after AdMob is fully configured
-      window.open(url, "_blank", "noopener,noreferrer");
+      // Show rewarded ad before opening YouTube
+      const granted = await showRewardedAd();
+      if (!granted) {
+        toast.error("Watch the full ad to continue");
+        return;
+      }
 
       // Grant XP for watching
       if (user) {
@@ -31,13 +34,18 @@ export const useRewardedYouTubeOpener = () => {
             .update({ xp: (prof?.xp || 0) + 5 })
             .eq("id", user.id);
           refreshProfile();
+          toast.success("+5 XP for watching!");
         } catch (e) {
           console.warn("XP update failed", e);
         }
       }
+
+      window.open(url, "_blank", "noopener,noreferrer");
+
     } catch (e) {
       console.error("YouTube opener failed", e);
-      toast.error("Could not open YouTube. Try again.");
+      // Open anyway if ad fails
+      window.open(url, "_blank", "noopener,noreferrer");
     }
   };
 };
