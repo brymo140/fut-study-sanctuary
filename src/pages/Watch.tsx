@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Play, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdMobBannerSlot } from "@/components/ads/AdMobBannerSlot";
+import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
 
 const YT_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
@@ -36,14 +37,7 @@ interface YTResult {
 }
 
 const Watch = () => {
-  const openYouTube = async (url: string) => {
-  if (!url) return;
-  try {
-    window.open(url, '_blank');
-  } catch (e) {
-    console.error('YouTube open failed:', e);
-  }
-};
+  const openYouTube = useRewardedYouTubeOpener();
   const [level, setLevel] = useState("All");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
