@@ -12,6 +12,7 @@ import { MaintenanceGate } from "@/components/MaintenanceGate";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SplashLoader } from "@/components/SplashLoader";
+import { showAppOpenAd } from "@/lib/admob";
 
 import Welcome from "./pages/Welcome";
 import Signup from "./pages/Signup";
@@ -44,11 +45,17 @@ const App = () => {
   const [booting, setBooting] = useState(true);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem(THEME_KEY);
-    document.documentElement.classList.toggle("light", savedTheme === "light");
-    const t = window.setTimeout(() => setBooting(false), 400);
-    return () => window.clearTimeout(t);
-  }, []);
+  const savedTheme = localStorage.getItem(THEME_KEY);
+  document.documentElement.classList.toggle("light", savedTheme === "light");
+  const t = window.setTimeout(() => setBooting(false), 400);
+  
+  // Show app open ad after splash
+  if (navigator.onLine) {
+    window.setTimeout(() => showAppOpenAd(), 3000);
+  }
+  
+  return () => window.clearTimeout(t);
+}, []);
 
   if (booting) {
     return <SplashLoader label="Starting HighVault..." />;
