@@ -5,10 +5,7 @@ import { AdMobBannerSlot } from "@/components/ads/AdMobBannerSlot";
 
 const YT_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
-{/* Banner ad */}
-{!searchQuery && <AdMobBannerSlot />}
-{/* Banner ad slot */}
-<AdMobBannerSlot />
+
 
 interface Channel {
   id: string;
@@ -244,6 +241,9 @@ const Watch = () => {
               </button>
             ))}
           </div>
+
+          {/* Banner ad */}
+          <AdMobBannerSlot />
 
           {/* Featured videos */}
           {featuredVideos.length > 0 && (
