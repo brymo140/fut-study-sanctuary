@@ -296,8 +296,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
             </div>
           )}
         </div>
-
-        <AITutor />
+        
       </DialogContent>
     </Dialog>
   );
