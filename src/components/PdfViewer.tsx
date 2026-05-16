@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
 import { AITutor } from "@/components/AITutor";
-
 
 interface Props {
   open: boolean;
@@ -13,46 +12,37 @@ interface Props {
   title?: string;
 }
 
-// Single page component
-const PdfPage = ({
-  pdfDoc,
-  pageNum,
-  scale,
-}: {
-  pdfDoc: any;
-  pageNum: number;
-  scale: number;
-}) => {
+const PdfPage = ({ pdfDoc, pageNum, scale }: { pdfDoc: any; pageNum: number; scale: number }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
 
   useEffect(() => {
     renderPage();
   }, [pdfDoc, pageNum, scale]);
-const renderPage = async (num: number) => {
-  if (!pdfDoc || !canvasRef.current) return;
-  if (renderTaskRef.current) {
-    try { renderTaskRef.current.cancel(); } catch {}
-  }
-  try {
-    const page = await pdfDoc.getPage(num);
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-    if (!context) return;
-    const containerWidth = canvas.parentElement?.clientWidth || window.innerWidth;
-    const viewport = page.getViewport({ scale: 1 });
-    const scale2 = (containerWidth / viewport.width) * scale;
-    const scaledViewport = page.getViewport({ scale: scale2 });
-    canvas.height = scaledViewport.height;
-    canvas.width = scaledViewport.width;
-    renderTaskRef.current = page.render({ canvasContext: context, viewport: scaledViewport });
-    await renderTaskRef.current.promise;
-  } catch (e: any) {
-    if (e?.name !== 'RenderingCancelledException') {
-      console.error('[PdfViewer] render error:', e);
+
+  const renderPage = async () => {
+    if (!pdfDoc || !canvasRef.current) return;
+    if (renderTaskRef.current) {
+      try { renderTaskRef.current.cancel(); } catch {}
     }
-  }
-};
+    try {
+      const page = await pdfDoc.getPage(pageNum);
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      const containerWidth = canvas.parentElement?.clientWidth || window.innerWidth;
+      const viewport = page.getViewport({ scale: 1 });
+      const scaledViewport = page.getViewport({ scale: (containerWidth / viewport.width) * scale });
+      canvas.height = scaledViewport.height;
+      canvas.width = scaledViewport.width;
+      renderTaskRef.current = page.render({ canvasContext: context, viewport: scaledViewport });
+      await renderTaskRef.current.promise;
+    } catch (e: any) {
+      if (e?.name !== 'RenderingCancelledException') {
+        console.error('[PdfPage] render error:', e);
+      }
+    }
+  };
 
   return (
     <div className="shadow-lg mb-4 bg-white">
@@ -61,21 +51,13 @@ const renderPage = async (num: number) => {
   );
 };
 
-export const PdfViewer = ({
-  open,
-  onOpenChange,
-  storagePath,
-  chapterId,
-  title,
-}: Props) => {
+export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }: Props) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(0);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [scale, setScale] = useState(1.0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-
-  // Added references and handlers
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTouchDistance = useRef<number | null>(null);
 
@@ -96,7 +78,7 @@ export const PdfViewer = ({
       const newDistance = getTouchDistance(e.touches);
       const delta = newDistance - lastTouchDistance.current;
       lastTouchDistance.current = newDistance;
-      setScale((s) => Math.min(3, Math.max(0.5, s + delta * 0.005)));
+      setScale(s => Math.min(3, Math.max(0.5, s + delta * 0.005)));
     }
   };
 
@@ -126,93 +108,95 @@ export const PdfViewer = ({
     loadPdf();
   }, [open, storagePath, chapterId]);
 
-  const loadPdf = async () => {
-    setLoading(true);
-    setError(null);
-    setPdfDoc(null);
-    try {
-  // Lazy load PDF.js only when needed — prevents blocking app startup
-  const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-
-  let pdfData: ArrayBuffer | null = null;
-
-  // Try device cache first
-  if (chapterId) {
-    const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
-    if (cachedFileName && !cachedFileName.startsWith('data:')) {
-      try {
-        const { Filesystem, Directory } = await import('@capacitor/filesystem');
-        const stat = await Filesystem.stat({
-          path: `highvault/chapters/${cachedFileName}`,
-          directory: Directory.Cache
-        });
-        console.log('[PdfViewer] Cache hit, size:', stat.size);
-        const result = await Filesystem.readFile({
-          path: `highvault/chapters/${cachedFileName}`,
-          directory: Directory.Cache
-        });
-        const base64 = result.data as string;
-        const base64Response = await fetch(`data:application/pdf;base64,${base64}`);
-        pdfData = await base64Response.arrayBuffer();
-        console.log('[PdfViewer] Loaded from cache');
-      } catch (e) {
-        console.log('[PdfViewer] Cache miss:', e);
-        localStorage.removeItem(`hv_dl_${chapterId}`);
-      }
-    }
-  }
-
-  if (!pdfData && isOffline) {
-    setError('You are offline. Download this PDF first to read offline.');
-    setLoading(false);
-    return;
-  }
-
-  if (!pdfData && storagePath) {
-    console.log('[PdfViewer] Fetching from Supabase');
-    const { data, error: signedUrlError } = await supabase.storage
-      .from("chapters")
-      .createSignedUrl(storagePath, 60 * 60);
-
-    if (signedUrlError || !data?.signedUrl) {
-      setError('Could not load PDF. Please try again.');
-      setLoading(false);
-      return;
-    }
-
-    const response = await fetch(data.signedUrl);
-    if (!response.ok) {
-      setError('Failed to fetch PDF. Check your connection.');
-      setLoading(false);
-      return;
-    }
-    pdfData = await response.arrayBuffer();
-    console.log('[PdfViewer] Loaded from remote');
-  }
-
-  if (!pdfData) {
-    setError('No PDF data available.');
-    setLoading(false);
-    return;
-  }
-
-  const loadingTask = pdfjsLib.getDocument({ data: pdfData });
-  const pdf = await loadingTask.promise;
-  setPdfDoc(pdf);
-  setTotalPages(pdf.numPages);
-
-} catch (e: any) {
-  console.error('[PdfViewer] error:', e);
-  setError('Failed to load PDF. Please try again.');
-}
-
   useEffect(() => {
     if (!open) return;
     const block = (e: Event) => e.preventDefault();
     document.addEventListener('contextmenu', block);
     return () => document.removeEventListener('contextmenu', block);
   }, [open]);
+
+  const loadPdf = async () => {
+    setLoading(true);
+    setError(null);
+    setPdfDoc(null);
+
+    try {
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
+      let pdfData: ArrayBuffer | null = null;
+
+      if (chapterId) {
+        const cachedFileName = localStorage.getItem(`hv_dl_${chapterId}`);
+        if (cachedFileName && !cachedFileName.startsWith('data:')) {
+          try {
+            const { Filesystem, Directory } = await import('@capacitor/filesystem');
+            const stat = await Filesystem.stat({
+              path: `highvault/chapters/${cachedFileName}`,
+              directory: Directory.Cache
+            });
+            console.log('[PdfViewer] Cache hit, size:', stat.size);
+            const result = await Filesystem.readFile({
+              path: `highvault/chapters/${cachedFileName}`,
+              directory: Directory.Cache
+            });
+            const base64 = result.data as string;
+            const base64Response = await fetch(`data:application/pdf;base64,${base64}`);
+            pdfData = await base64Response.arrayBuffer();
+            console.log('[PdfViewer] Loaded from cache');
+          } catch (e) {
+            console.log('[PdfViewer] Cache miss:', e);
+            localStorage.removeItem(`hv_dl_${chapterId}`);
+          }
+        }
+      }
+
+      if (!pdfData && isOffline) {
+        setError('You are offline. Download this PDF first to read offline.');
+        setLoading(false);
+        return;
+      }
+
+      if (!pdfData && storagePath) {
+        console.log('[PdfViewer] Fetching from Supabase');
+        const { data, error: signedUrlError } = await supabase.storage
+          .from("chapters")
+          .createSignedUrl(storagePath, 60 * 60);
+
+        if (signedUrlError || !data?.signedUrl) {
+          setError('Could not load PDF. Please try again.');
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch(data.signedUrl);
+        if (!response.ok) {
+          setError('Failed to fetch PDF. Check your connection.');
+          setLoading(false);
+          return;
+        }
+        pdfData = await response.arrayBuffer();
+        console.log('[PdfViewer] Loaded from remote');
+      }
+
+      if (!pdfData) {
+        setError('No PDF data available.');
+        setLoading(false);
+        return;
+      }
+
+      const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+      const pdf = await loadingTask.promise;
+      setPdfDoc(pdf);
+      setTotalPages(pdf.numPages);
+
+    } catch (e: any) {
+      console.error('[PdfViewer] error:', e);
+      setError('Failed to load PDF. Please try again.');
+    }
+
+    setLoading(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -224,9 +208,7 @@ export const PdfViewer = ({
         <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <BookOpen className="h-4 w-4 text-primary shrink-0" />
-            <p className="text-sm font-semibold line-clamp-1">
-              {title || 'Reading'}
-            </p>
+            <p className="text-sm font-semibold line-clamp-1">{title || 'Reading'}</p>
           </div>
           <div className="flex items-center gap-1">
             {!loading && !error && (
@@ -250,9 +232,7 @@ export const PdfViewer = ({
         {!loading && !error && totalPages > 0 && (
           <div className="flex items-center justify-center gap-3 py-2 bg-surface border-b border-border shrink-0">
             <button
-              onClick={() =>
-                setScale((s) => Math.max(0.5, parseFloat((s - 0.25).toFixed(2))))
-              }
+              onClick={() => setScale(s => Math.max(0.5, parseFloat((s - 0.25).toFixed(2))))}
               className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-surface-elevated border border-border"
             >
               <ZoomOut className="h-4 w-4" />
@@ -261,9 +241,7 @@ export const PdfViewer = ({
               {Math.round(scale * 100)}%
             </span>
             <button
-              onClick={() =>
-                setScale((s) => Math.min(3, parseFloat((s + 0.25).toFixed(2))))
-              }
+              onClick={() => setScale(s => Math.min(3, parseFloat((s + 0.25).toFixed(2))))}
               className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-surface-elevated border border-border"
             >
               <ZoomIn className="h-4 w-4" />
@@ -275,7 +253,7 @@ export const PdfViewer = ({
           </div>
         )}
 
-        {/* Content Area */}
+        {/* Content */}
         <div
           className="flex-1 min-h-0 overflow-auto bg-slate-900 select-none p-4"
           onContextMenu={(e) => e.preventDefault()}
@@ -307,16 +285,14 @@ export const PdfViewer = ({
 
           {!loading && !error && pdfDoc && (
             <div className="flex flex-col items-center">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (num) => (
-                  <PdfPage
-                    key={`${num}-${scale}`}
-                    pdfDoc={pdfDoc}
-                    pageNum={num}
-                    scale={scale}
-                  />
-                )
-              )}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(num => (
+                <PdfPage
+                  key={`${num}-${scale}`}
+                  pdfDoc={pdfDoc}
+                  pageNum={num}
+                  scale={scale}
+                />
+              ))}
             </div>
           )}
         </div>
