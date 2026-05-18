@@ -17,11 +17,11 @@ const isNative = () =>
 
 // Real production ad unit IDs
 export const AD_UNITS = {
-  banner: "ca-app-pub-4988426041877845/8206772628",
-  interstitial: "ca-app-pub-4988426041877845/2776376187",
-  rewarded: "ca-app-pub-4988426041877845/6192877016",
+  banner: "ca-app-pub-4988426041877845/2198116054",
+  interstitial: "ca-app-pub-4988426041877845/8852971003",
+  rewarded: "ca-app-pub-4988426041877845/6468533553",
   rewardedInterstitial: "ca-app-pub-4988426041877845/8529692908",
-  appOpen: "ca-app-pub-4988426041877845/9820769449",
+  appOpen: "ca-app-pub-4988426041877845/2640969184",
 };
 
 export const getAdMobAppId = async (): Promise<string> => {
