@@ -20,10 +20,6 @@
         "source": "com.highvault.futminna.app-main-44:/mipmap-xxhdpi/ic_launcher_foreground.png"
     },
     {
-        "merged": "com.highvault.futminna.app-debug-42:/mipmap-hdpi_ic_launcher.png.flat",
-        "source": "com.highvault.futminna.app-main-44:/mipmap-hdpi/ic_launcher.png"
-    },
-    {
         "merged": "com.highvault.futminna.app-debug-42:/xml_config.xml.flat",
         "source": "com.highvault.futminna.app-main-44:/xml/config.xml"
     },
@@ -60,10 +56,6 @@
         "source": "com.highvault.futminna.app-main-44:/layout/activity_main.xml"
     },
     {
-        "merged": "com.highvault.futminna.app-debug-42:/mipmap-xxhdpi_ic_launcher.png.flat",
-        "source": "com.highvault.futminna.app-main-44:/mipmap-xxhdpi/ic_launcher.png"
-    },
-    {
         "merged": "com.highvault.futminna.app-debug-42:/drawable-land-xhdpi_splash.png.flat",
         "source": "com.highvault.futminna.app-main-44:/drawable-land-xhdpi/splash.png"
     },
@@ -96,14 +88,6 @@
         "source": "com.highvault.futminna.app-main-44:/drawable/ic_launcher_background.xml"
     },
     {
-        "merged": "com.highvault.futminna.app-debug-42:/mipmap-mdpi_ic_launcher.png.flat",
-        "source": "com.highvault.futminna.app-main-44:/mipmap-mdpi/ic_launcher.png"
-    },
-    {
-        "merged": "com.highvault.futminna.app-debug-42:/mipmap-xxxhdpi_ic_launcher.png.flat",
-        "source": "com.highvault.futminna.app-main-44:/mipmap-xxxhdpi/ic_launcher.png"
-    },
-    {
         "merged": "com.highvault.futminna.app-debug-42:/drawable-land-hdpi_splash.png.flat",
         "source": "com.highvault.futminna.app-main-44:/drawable-land-hdpi/splash.png"
     },
@@ -114,10 +98,6 @@
     {
         "merged": "com.highvault.futminna.app-debug-42:/mipmap-mdpi_ic_launcher_round.png.flat",
         "source": "com.highvault.futminna.app-main-44:/mipmap-mdpi/ic_launcher_round.png"
-    },
-    {
-        "merged": "com.highvault.futminna.app-debug-42:/mipmap-xhdpi_ic_launcher.png.flat",
-        "source": "com.highvault.futminna.app-main-44:/mipmap-xhdpi/ic_launcher.png"
     },
     {
         "merged": "com.highvault.futminna.app-debug-42:/mipmap-mdpi_ic_launcher_foreground.png.flat",
