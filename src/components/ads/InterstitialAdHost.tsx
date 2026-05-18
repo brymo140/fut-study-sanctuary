@@ -1,9 +1,7 @@
-// Schedules interstitial / rewarded-interstitial ads every 30–40 minutes
-// at the next natural navigation. Uses the AdMob SDK via src/lib/admob.ts.
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { AdSession } from "@/lib/adSession";
-import { showInterstitial, showRewardedAd, isOnline } from "@/lib/admob";
+import { showInterstitial, showRewardedInterstitial, isOnline } from "@/lib/admob";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -22,14 +20,15 @@ export const InterstitialAdHost = () => {
     if (showing.current) return;
     if (!isOnline()) return;
     if (!AdSession.isInterstitialDue()) return;
-
     showing.current = true;
+
     const kind = AdSession.pickInterstitialKind();
 
     (async () => {
       try {
         if (kind === "rewarded-interstitial") {
-          const granted = await showRewardedAd();
+          // Show rewarded interstitial — user gets XP bonus for watching
+          const granted = await showRewardedInterstitial();
           AdSession.markInterstitialShown();
           if (granted && user) {
             const { data: prof } = await supabase
@@ -37,9 +36,10 @@ export const InterstitialAdHost = () => {
             await supabase
               .from("profiles").update({ xp: (prof?.xp || 0) + 25 }).eq("id", user.id);
             refreshProfile();
-            toast.success("+25 XP Bonus!");
+            toast.success("+25 XP Bonus! 🎉");
           }
         } else {
+          // Show regular interstitial
           await showInterstitial();
           AdSession.markInterstitialShown();
         }
