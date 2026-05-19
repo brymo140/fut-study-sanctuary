@@ -1,0 +1,27 @@
+{
+  "name": "HighVault",
+  "short_name": "HighVault",
+  "description": "FUTMinna Study Materials — Past Questions, Lecture Notes & AI Tutor",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07080f",
+  "theme_color": "#3b8bf5",
+  "icons": [
+    {
+      "src": "/highvault-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/highvault-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "utilities"],
+  "lang": "en",
+  "scope": "/"
+}
