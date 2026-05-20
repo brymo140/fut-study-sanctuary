@@ -21,28 +21,42 @@ const PdfPage = ({ pdfDoc, pageNum, scale }: { pdfDoc: any; pageNum: number; sca
   }, [pdfDoc, pageNum, scale]);
 
   const renderPage = async () => {
-    if (!pdfDoc || !canvasRef.current) return;
-    if (renderTaskRef.current) {
-      try { renderTaskRef.current.cancel(); } catch {}
+  if (!pdfDoc || !canvasRef.current) return;
+  if (renderTaskRef.current) {
+    try { renderTaskRef.current.cancel(); } catch {}
+  }
+  try {
+    const page = await pdfDoc.getPage(pageNum);
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    const containerWidth = canvas.parentElement?.clientWidth || window.innerWidth;
+    const viewport = page.getViewport({ scale: 1 });
+    const pixelRatio = window.devicePixelRatio || 1;
+    const scaledViewport = page.getViewport({ 
+      scale: (containerWidth / viewport.width) * scale 
+    });
+
+    // Fix for Safari/iPhone — use devicePixelRatio for sharp rendering
+    canvas.width = Math.floor(scaledViewport.width * pixelRatio);
+    canvas.height = Math.floor(scaledViewport.height * pixelRatio);
+    canvas.style.width = `${Math.floor(scaledViewport.width)}px`;
+    canvas.style.height = `${Math.floor(scaledViewport.height)}px`;
+
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
+    renderTaskRef.current = page.render({
+      canvasContext: context,
+      viewport: scaledViewport,
+    });
+    await renderTaskRef.current.promise;
+  } catch (e: any) {
+    if (e?.name !== 'RenderingCancelledException') {
+      console.error('[PdfPage] render error:', e);
     }
-    try {
-      const page = await pdfDoc.getPage(pageNum);
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      if (!context) return;
-      const containerWidth = canvas.parentElement?.clientWidth || window.innerWidth;
-      const viewport = page.getViewport({ scale: 1 });
-      const scaledViewport = page.getViewport({ scale: (containerWidth / viewport.width) * scale });
-      canvas.height = scaledViewport.height;
-      canvas.width = scaledViewport.width;
-      renderTaskRef.current = page.render({ canvasContext: context, viewport: scaledViewport });
-      await renderTaskRef.current.promise;
-    } catch (e: any) {
-      if (e?.name !== 'RenderingCancelledException') {
-        console.error('[PdfPage] render error:', e);
-      }
-    }
-  };
+  }
+};
 
   return (
     <div className="shadow-lg mb-4 bg-white">
@@ -74,13 +88,17 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2 && lastTouchDistance.current !== null) {
-      const newDistance = getTouchDistance(e.touches);
-      const delta = newDistance - lastTouchDistance.current;
-      lastTouchDistance.current = newDistance;
-      setScale(s => Math.min(3, Math.max(0.5, s + delta * 0.005)));
-    }
-  };
+  if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+    e.preventDefault();
+    const newDistance = getTouchDistance(e.touches);
+    const ratio = newDistance / lastTouchDistance.current;
+    lastTouchDistance.current = newDistance;
+    setScale(s => {
+      const next = s * ratio;
+      return Math.min(4, Math.max(0.5, next));
+    });
+  }
+};
 
   const handleTouchEnd = () => {
     lastTouchDistance.current = null;
@@ -202,7 +220,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="max-w-none w-screen h-screen sm:rounded-none p-0 bg-background border-0 [&>button]:hidden flex flex-col"
-        onContextMenu={(e) => e.preventDefault()}
+style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0"
@@ -258,7 +276,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
         <div
           className="flex-1 min-h-0 overflow-auto bg-slate-900 select-none p-4"
           onContextMenu={(e) => e.preventDefault()}
-          style={{ WebkitTouchCallout: 'none' } as any}
+          style={{ WebkitTouchCallout: 'none', touchAction: 'none' } as any}
           ref={containerRef}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
