@@ -3,7 +3,7 @@ const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/highvault-icon.png',
+  '/app-icon.png',
   '/pdf.worker.min.mjs',
 ];
 
