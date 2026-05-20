@@ -9,13 +9,13 @@
   "theme_color": "#3b8bf5",
   "icons": [
     {
-      "src": "/highvault-icon.png",
+      "src": "/app-icon.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/highvault-icon.png",
+      "src": "/app-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
