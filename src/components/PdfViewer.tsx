@@ -205,7 +205,8 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0"
+        style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <BookOpen className="h-4 w-4 text-primary shrink-0" />
             <p className="text-sm font-semibold line-clamp-1">{title || 'Reading'}</p>
