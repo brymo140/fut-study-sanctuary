@@ -57,6 +57,48 @@ export const initAdMob = async () => {
   }
 };
 
+// Preload rewarded ad so it shows instantly when needed
+let rewardedAdReady = false;
+
+export const preloadRewardedAd = async () => {
+  if (!isNative() || !isOnline()) return;
+  await initAdMob();
+  try {
+    await AdMob.prepareRewardVideoAd({
+      adId: AD_UNITS.rewarded,
+      isTesting: false,
+    });
+    rewardedAdReady = true;
+    console.log('[AdMob] Rewarded ad preloaded');
+  } catch (e) {
+    rewardedAdReady = false;
+    console.warn('[AdMob] Preload failed:', e);
+  }
+};
+
+export const showRewardedAd = async (): Promise<boolean> => {
+  if (!isOnline()) return false;
+  if (!isNative()) return true;
+  await initAdMob();
+  try {
+    // If not preloaded, prepare now
+    if (!rewardedAdReady) {
+      await AdMob.prepareRewardVideoAd({
+        adId: AD_UNITS.rewarded,
+        isTesting: false,
+      });
+    }
+    rewardedAdReady = false; // Reset flag
+    const result = await AdMob.showRewardVideoAd();
+    // Preload next ad immediately after showing
+    preloadRewardedAd();
+    return !!result;
+  } catch (e) {
+    console.warn('[AdMob] Rewarded failed:', e);
+    return false;
+  }
+};
+
 // ---------- BANNER ----------
 let bannerVisible = false;
 
