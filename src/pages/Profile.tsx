@@ -128,6 +128,70 @@ const Profile = () => {
         <Row icon={Shield} label="Account role" value={roleLabel} />
       </div>
 
+      {/* Clear Downloads */}
+<div className="surface-card p-4 space-y-3">
+  <div>
+    <p className="text-sm font-semibold">Storage & Downloads</p>
+    <p className="text-xs text-muted-foreground mt-1">
+      Remove all downloaded PDFs from your device. Your account and bookmarks are kept. Re-download anytime.
+    </p>
+  </div>
+  <Button
+    variant="outline"
+    className="w-full bg-surface border-border text-sm h-11"
+    onClick={async () => {
+      if (!confirm("Remove all downloaded PDFs from this device? You can re-download them anytime.")) return;
+      try {
+        // Clear localStorage download records
+        const keysToDelete: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (
+            key.startsWith('hv_dl_') ||
+            key.startsWith('hv_local_') ||
+            key === 'hv_local_pdf_paths' ||
+            key === 'hv_cache_downloads'
+          )) keysToDelete.push(key);
+        }
+        keysToDelete.forEach(k => localStorage.removeItem(k));
+
+        // Delete physical files from device
+        try {
+          const { Filesystem, Directory } = await import('@capacitor/filesystem');
+          try {
+            const { files } = await Filesystem.readdir({
+              path: 'highvault/chapters',
+              directory: Directory.Cache,
+            });
+            for (const file of files) {
+              try {
+                await Filesystem.deleteFile({
+                  path: `highvault/chapters/${file.name}`,
+                  directory: Directory.Cache,
+                });
+              } catch {}
+            }
+          } catch {}
+        } catch {}
+
+        // Clear download records from Supabase
+        if (session?.user?.id) {
+          await supabase.from('downloads').delete().eq('user_id', session.user.id);
+        }
+
+        toast.success("Downloads cleared successfully!");
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (e) {
+        console.error('Clear cache error:', e);
+        toast.success("Local downloads cleared!");
+        setTimeout(() => window.location.reload(), 1000);
+      }
+    }}
+  >
+    🗑️ Clear Downloaded PDFs
+  </Button>
+</div>
+      
       <Button
         onClick={async () => { await signOut(); navigate("/welcome"); }}
         variant="outline"
