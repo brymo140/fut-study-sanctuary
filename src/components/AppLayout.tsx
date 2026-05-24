@@ -15,8 +15,7 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
   // Initialize AdMob once, manage banner lifecycle, and react to network changes.
   useEffect(() => { 
   initAdMob();
-  // Preload rewarded ad immediately so it shows fast when needed
-  setTimeout(() => preloadRewardedAd(), 2000);
+  setTimeout(() => preloadRewardedAd(), 3000);
 }, []);
 
   useEffect(() => {
