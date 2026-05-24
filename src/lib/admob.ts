@@ -15,13 +15,11 @@ export const isOnline = () =>
 const isNative = () =>
   typeof Capacitor !== "undefined" && Capacitor.isNativePlatform?.();
 
-// Real production ad unit IDs
 export const AD_UNITS = {
   banner: "ca-app-pub-4988426041877845/2198116054",
   interstitial: "ca-app-pub-4988426041877845/8852971003",
   rewarded: "ca-app-pub-4988426041877845/6468533553",
   rewardedInterstitial: "ca-app-pub-4988426041877845/8529692908",
-  appOpen: "ca-app-pub-4988426041877845/2640969184",
 };
 
 export const getAdMobAppId = async (): Promise<string> => {
@@ -51,13 +49,12 @@ export const initAdMob = async () => {
       initializeForTesting: false,
     });
     initialized = true;
-    console.log('[AdMob] Initialized successfully');
   } catch (e) {
     console.warn("AdMob init failed", e);
   }
 };
 
-// Preload rewarded ad so it shows instantly when needed
+// Preload rewarded ad for faster display
 let rewardedAdReady = false;
 
 export const preloadRewardedAd = async () => {
@@ -69,32 +66,29 @@ export const preloadRewardedAd = async () => {
       isTesting: false,
     });
     rewardedAdReady = true;
-    console.log('[AdMob] Rewarded ad preloaded');
   } catch (e) {
     rewardedAdReady = false;
-    console.warn('[AdMob] Preload failed:', e);
   }
 };
 
-export const showRewardedAds = async (): Promise<boolean> => {
+// ---------- REWARDED ----------
+export const showRewardedAd = async (): Promise<boolean> => {
   if (!isOnline()) return false;
   if (!isNative()) return true;
   await initAdMob();
   try {
-    // If not preloaded, prepare now
     if (!rewardedAdReady) {
       await AdMob.prepareRewardVideoAd({
         adId: AD_UNITS.rewarded,
         isTesting: false,
       });
     }
-    rewardedAdReady = false; // Reset flag
+    rewardedAdReady = false;
     const result = await AdMob.showRewardVideoAd();
-    // Preload next ad immediately after showing
-    preloadRewardedAd();
+    preloadRewardedAd(); // Preload next immediately
     return !!result;
   } catch (e) {
-    console.warn('[AdMob] Rewarded failed:', e);
+    console.warn("AdMob rewarded failed", e);
     return false;
   }
 };
@@ -122,29 +116,8 @@ export const showBanner = async () => {
 
 export const hideBanner = async () => {
   if (!isNative() || !bannerVisible) return;
-  try {
-    await AdMob.hideBanner();
-  } catch {/* ignore */}
+  try { await AdMob.hideBanner(); } catch {}
   bannerVisible = false;
-};
-
-// ---------- REWARDED ----------
-export const showRewardedAd = async (): Promise<boolean> => {
-  if (!isOnline()) return false;
-  if (!isNative()) return true;
-  await initAdMob();
-  try {
-    const options: RewardAdOptions = {
-      adId: AD_UNITS.rewarded,
-      isTesting: false,
-    };
-    await AdMob.prepareRewardVideoAd(options);
-    const result = await AdMob.showRewardVideoAd();
-    return !!result;
-  } catch (e) {
-    console.warn("AdMob rewarded failed", e);
-    return false;
-  }
 };
 
 // ---------- INTERSTITIAL ----------
@@ -184,20 +157,5 @@ export const showRewardedInterstitial = async (): Promise<boolean> => {
   }
 };
 
-// ---------- APP OPEN ----------
-export const showAppOpenAd = async (): Promise<boolean> => {
-  if (!isOnline()) return false;
-  if (!isNative()) return false;
-  await initAdMob();
-  try {
-    await AdMob.prepareRewardVideoAd({
-      adId: AD_UNITS.appOpen,
-      isTesting: false,
-    });
-    await AdMob.showRewardVideoAd();
-    return true;
-  } catch (e) {
-    console.warn("App open ad failed", e);
-    return false;
-  }
-};
+// App Open disabled - not supported by this plugin version
+export const showAppOpenAd = async (): Promise<boolean> => false;
