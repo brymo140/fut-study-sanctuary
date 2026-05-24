@@ -279,7 +279,7 @@ style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-i
         <div
           className="flex-1 min-h-0 overflow-auto bg-slate-900 select-none p-4"
           onContextMenu={(e) => e.preventDefault()}
-          style={{ WebkitTouchCallout: 'none', touchAction: 'none' } as any}
+          style={{ WebkitTouchCallout: 'none' } as any}
           ref={containerRef}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
