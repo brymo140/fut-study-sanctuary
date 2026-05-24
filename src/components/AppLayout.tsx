@@ -6,13 +6,18 @@ import { InterstitialAdHost } from "./ads/InterstitialAdHost";
 import { initAdMob, showBanner, hideBanner } from "@/lib/admob";
 import { AdSession } from "@/lib/adSession";
 import { OnboardingGuide } from "./OnboardingGuide";
+import { initAdMob, showBanner, hideBanner, preloadRewardedAd } from "@/lib/admob";
 
 export const AppLayout = ({ children }: { children: ReactNode }) => {
   const { pathname } = useLocation();
   const isAdmin = pathname.startsWith("/admin");
 
   // Initialize AdMob once, manage banner lifecycle, and react to network changes.
-  useEffect(() => { initAdMob(); }, []);
+  useEffect(() => { 
+  initAdMob();
+  // Preload rewarded ad immediately so it shows fast when needed
+  setTimeout(() => preloadRewardedAd(), 2000);
+}, []);
 
   useEffect(() => {
     const onAuth = AdSession.isAuthPath(pathname);
