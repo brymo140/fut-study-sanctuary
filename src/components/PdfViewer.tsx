@@ -179,26 +179,36 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
       }
 
       if (!pdfData && storagePath) {
-        console.log('[PdfViewer] Fetching from Supabase');
-        const { data, error: signedUrlError } = await supabase.storage
-          .from("chapters")
-          .createSignedUrl(storagePath, 60 * 60);
+  const { data, error: signedUrlError } = await supabase.storage
+    .from("chapters")
+    .createSignedUrl(storagePath, 60 * 60);
 
-        if (signedUrlError || !data?.signedUrl) {
-          setError('Could not load PDF. Please try again.');
-          setLoading(false);
-          return;
-        }
+  if (signedUrlError || !data?.signedUrl) {
+    setError('Could not load PDF. Please try again.');
+    setLoading(false);
+    return;
+  }
 
-        const response = await fetch(data.signedUrl);
-        if (!response.ok) {
-          setError('Failed to fetch PDF. Check your connection.');
-          setLoading(false);
-          return;
-        }
-        pdfData = await response.arrayBuffer();
-        console.log('[PdfViewer] Loaded from remote');
-      }
+  // iOS Safari — use native iframe PDF rendering instead of PDF.js
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  if (ios) {
+    // Store the signed URL for iframe rendering
+    (window as any).__iosSignedPdfUrl = data.signedUrl;
+    setIosUrl(data.signedUrl);
+    setLoading(false);
+    return;
+  }
+
+  const response = await fetch(data.signedUrl);
+  if (!response.ok) {
+    setError('Failed to fetch PDF. Check your connection.');
+    setLoading(false);
+    return;
+  }
+  pdfData = await response.arrayBuffer();
+}
 
       if (!pdfData) {
         setError('No PDF data available.');
