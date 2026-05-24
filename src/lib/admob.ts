@@ -76,7 +76,7 @@ export const preloadRewardedAd = async () => {
   }
 };
 
-export const showRewardedAd = async (): Promise<boolean> => {
+export const showRewardedAds = async (): Promise<boolean> => {
   if (!isOnline()) return false;
   if (!isNative()) return true;
   await initAdMob();
