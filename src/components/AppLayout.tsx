@@ -3,7 +3,6 @@ import { useLocation } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 import { AITutor } from "./AITutor";
 import { InterstitialAdHost } from "./ads/InterstitialAdHost";
-import { initAdMob, showBanner, hideBanner } from "@/lib/admob";
 import { AdSession } from "@/lib/adSession";
 import { OnboardingGuide } from "./OnboardingGuide";
 import { initAdMob, showBanner, hideBanner, preloadRewardedAd } from "@/lib/admob";
