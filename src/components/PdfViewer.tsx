@@ -28,8 +28,10 @@ const PdfPage = ({ pdfDoc, pageNum, scale }: { pdfDoc: any; pageNum: number; sca
   try {
     const page = await pdfDoc.getPage(pageNum);
     const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { willReadFrequently: false });
     if (!context) return;
+    // Safari fix — must set canvas size BEFORE getting context operations
+    context.save();
 
     const containerWidth = canvas.parentElement?.clientWidth || window.innerWidth;
     const viewport = page.getViewport({ scale: 1 });
@@ -51,6 +53,7 @@ const PdfPage = ({ pdfDoc, pageNum, scale }: { pdfDoc: any; pageNum: number; sca
       viewport: scaledViewport,
     });
     await renderTaskRef.current.promise;
+    context.restore();
   } catch (e: any) {
     if (e?.name !== 'RenderingCancelledException') {
       console.error('[PdfPage] render error:', e);
