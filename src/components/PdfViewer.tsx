@@ -75,6 +75,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [scale, setScale] = useState(1.0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [iosUrl, setIosUrl] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTouchDistance = useRef<number | null>(null);
 
@@ -120,12 +121,13 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
 
   useEffect(() => {
     if (!open) {
-      setPdfDoc(null);
-      setTotalPages(0);
-      setError(null);
-      setScale(1.0);
-      return;
-    }
+  setPdfDoc(null);
+  setTotalPages(0);
+  setError(null);
+  setScale(1.0);
+  setIosUrl(null);
+  return;
+}
     loadPdf();
   }, [open, storagePath, chapterId]);
 
@@ -315,6 +317,26 @@ style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-i
             </div>
           )}
 
+          {!loading && !error && iosUrl && (
+          <div className="relative w-full h-full">
+            <div
+              style={{
+                position: 'absolute',
+                top: 0, right: 0,
+                width: '56px', height: '56px',
+                background: '#0f172a',
+                zIndex: 999,
+                pointerEvents: 'none',
+              }}
+            />
+            <iframe
+              src={iosUrl}
+              title={title || 'PDF'}
+              className="w-full h-full"
+              style={{ border: 0, display: 'block' }}
+            />
+          </div>
+        )}
           {!loading && !error && pdfDoc && (
             <div className="flex flex-col items-center">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(num => (
