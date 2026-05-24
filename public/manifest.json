@@ -1,7 +1,7 @@
 {
   "name": "HighVault",
   "short_name": "HighVault",
-  "description": "FUTMinna Study Materials — Past Questions, Lecture Notes & AI Tutor",
+  "description": "FUTMinna Study Materials",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
@@ -20,7 +20,7 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ],
+  ]
   "categories": ["education", "utilities"],
   "lang": "en",
   "scope": "/"
