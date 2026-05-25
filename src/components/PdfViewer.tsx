@@ -318,25 +318,21 @@ style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-i
           )}
 
           {!loading && !error && iosUrl && (
-          <div className="relative w-full h-full">
-            <div
-              style={{
-                position: 'absolute',
-                top: 0, right: 0,
-                width: '56px', height: '56px',
-                background: '#0f172a',
-                zIndex: 999,
-                pointerEvents: 'none',
-              }}
-            />
-            <iframe
-              src={iosUrl}
-              title={title || 'PDF'}
-              className="w-full h-full"
-              style={{ border: 0, display: 'block' }}
-            />
-          </div>
-        )}
+  <div className="w-full h-full overflow-auto bg-gray-100">
+    <iframe
+      src={iosUrl}
+      title={title || 'PDF'}
+      style={{
+        border: 0,
+        display: 'block',
+        width: '100%',
+        height: '100vh',
+        minHeight: '100%',
+      }}
+      allow="fullscreen"
+    />
+  </div>
+)}
           {!loading && !error && pdfDoc && (
             <div className="flex flex-col items-center">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(num => (
