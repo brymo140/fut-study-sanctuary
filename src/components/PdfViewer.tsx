@@ -325,7 +325,7 @@ style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-i
             </div>
           )}
 
-          {{!loading && !error && iosUrl && (
+          {!loading && !error && iosUrl && (
   <div
     className="w-full h-full"
     style={{ WebkitOverflowScrolling: 'touch' } as any}
