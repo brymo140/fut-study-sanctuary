@@ -326,30 +326,28 @@ style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-i
           )}
 
           {!loading && !error && iosUrl && (
-  <div
-    className="w-full h-full"
-    style={{ WebkitOverflowScrolling: 'touch' } as any}
-  >
-    <object
-      data={iosUrl}
-      type="application/pdf"
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'block',
-      }}
-    >
+  <div className="w-full h-full flex flex-col">
+    <div className="flex-1 overflow-hidden">
       <iframe
         src={iosUrl}
+        title={title || 'PDF'}
         style={{
           width: '100%',
           height: '100%',
           border: 'none',
-          display: 'block',
         }}
-        title={title || 'PDF'}
       />
-    </object>
+    </div>
+    <div className="shrink-0 py-2 px-4 bg-surface border-t border-border flex items-center justify-center">
+      
+        href={iosUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xs text-primary flex items-center gap-1"
+      >
+        📄 Open all pages in Safari
+      </a>
+    </div>
   </div>
 )}
           {!loading && !error && pdfDoc && (
