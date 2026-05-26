@@ -339,7 +339,7 @@ style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-i
       />
     </div>
     <div className="shrink-0 py-2 px-4 bg-surface border-t border-border flex items-center justify-center">
-      
+      <a
         href={iosUrl}
         target="_blank"
         rel="noopener noreferrer"
