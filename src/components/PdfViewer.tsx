@@ -196,12 +196,20 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   if (ios) {
-    // Store the signed URL for iframe rendering
-    (window as any).__iosSignedPdfUrl = data.signedUrl;
+  // Fetch PDF data and create blob URL for native Safari rendering
+  try {
+    const response = await fetch(data.signedUrl);
+    if (!response.ok) throw new Error('Fetch failed');
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    setIosUrl(blobUrl);
+  } catch {
+    // Fallback to direct URL if blob fails
     setIosUrl(data.signedUrl);
-    setLoading(false);
-    return;
   }
+  setLoading(false);
+  return;
+}
 
   const response = await fetch(data.signedUrl);
   if (!response.ok) {
@@ -317,20 +325,31 @@ style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-i
             </div>
           )}
 
-          {!loading && !error && iosUrl && (
-  <div className="w-full h-full overflow-auto bg-gray-100">
-    <iframe
-      src={iosUrl}
-      title={title || 'PDF'}
+          {{!loading && !error && iosUrl && (
+  <div
+    className="w-full h-full"
+    style={{ WebkitOverflowScrolling: 'touch' } as any}
+  >
+    <object
+      data={iosUrl}
+      type="application/pdf"
       style={{
-        border: 0,
-        display: 'block',
         width: '100%',
-        height: '100vh',
-        minHeight: '100%',
+        height: '100%',
+        display: 'block',
       }}
-      allow="fullscreen"
-    />
+    >
+      <iframe
+        src={iosUrl}
+        style={{
+          width: '100%',
+          height: '100%',
+          border: 'none',
+          display: 'block',
+        }}
+        title={title || 'PDF'}
+      />
+    </object>
   </div>
 )}
           {!loading && !error && pdfDoc && (
