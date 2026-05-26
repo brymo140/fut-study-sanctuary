@@ -348,10 +348,10 @@ const PdfDetail = () => {
         {/* Modules */}
         <section>
           <h2 className="text-sm font-bold mb-1">
-            Modules / Topics — watch an ad to download each one
+            Modules / Topics — download each one to start reading.
           </h2>
           <p className="text-[11px] text-muted-foreground mb-3">
-            📖 Download once, then read from your library with no extra ad.
+            📖 Download once, then read from your library.
           </p>
           {chapters.length === 0 ? (
             <div className="surface-card p-6 text-center text-sm text-muted-foreground">
@@ -407,7 +407,7 @@ const PdfDetail = () => {
                       )}
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-2 inline-flex items-center gap-1">
-                      <Lock className="h-2.5 w-2.5" /> Rewarded ad required before first download.
+                      <Lock className="h-2.5 w-2.5" /> Download requred to start reading.
                     </p>
                   </div>
                 );
