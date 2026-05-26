@@ -19,10 +19,26 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
 }, []);
 
   useEffect(() => {
+  const manageBanner = async () => {
     const onAuth = AdSession.isAuthPath(pathname);
-    if (onAuth || !navigator.onLine) hideBanner();
-    else showBanner();
-  }, [pathname]);
+    if (onAuth || !navigator.onLine) {
+      hideBanner();
+    } else {
+      await showBanner();
+    }
+  };
+  manageBanner();
+}, [pathname]);
+
+// Keep banner alive - refresh every 30 seconds
+useEffect(() => {
+  const interval = setInterval(() => {
+    if (!AdSession.isAuthPath(window.location.pathname) && navigator.onLine) {
+      showBanner();
+    }
+  }, 30000);
+  return () => clearInterval(interval);
+}, []);
 
   useEffect(() => {
     const on = () => { if (!AdSession.isAuthPath(window.location.pathname)) showBanner(); };
