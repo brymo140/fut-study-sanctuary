@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { isOnline, showRewardedAd } from "@/lib/admob";
+import { isOnline, showRewardedInterstitial } from "@/lib/admob";
 import { toast } from "sonner";
 
 export const useRewardedYouTubeOpener = () => {
@@ -15,7 +15,7 @@ export const useRewardedYouTubeOpener = () => {
 
     try {
       // Show rewarded ad before opening YouTube
-      const granted = await showRewardedAd();
+      const granted = await showRewardedInterstitial();
       if (!granted) {
         toast.error("Watch the full ad to continue");
         return;
