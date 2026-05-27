@@ -320,38 +320,34 @@ const Downloads = () => {
       <BookOpen className="h-3 w-3" /> Read 📖
     </button>
     <button
-      onClick={async () => {
-        if (!confirm(`Delete "${ch.title}"?`)) return;
-        try {
-          // Remove from localStorage
-          localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
-          // Remove physical file
+              onClick={async () => {
+          if (!confirm(`Delete "${ch.title}"?`)) return;
           try {
-            const { Filesystem, Directory } = await import('@capacitor/filesystem');
-            const fileName = `${g.subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`;
-            const { safeName } = await import('@/lib/deviceFiles');
-            await Filesystem.deleteFile({
-              path: `highvault/chapters/${safeName(fileName)}`,
-              directory: Directory.Cache,
-            });
-          } catch {}
-          // Remove from Supabase downloads
-          if (user?.id) {
-            await supabase.from('downloads').delete()
-              .eq('user_id', user.id)
-              .eq('chapter_id', ch.id);
+            localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
+            try {
+              const { Filesystem, Directory } = await import('@capacitor/filesystem');
+              const fileName = `${g.subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`.replace(/[^a-z0-9._-]/gi, "_");
+              await Filesystem.deleteFile({
+                path: `highvault/chapters/${fileName}`,
+                directory: Directory.Cache,
+              });
+            } catch {}
+            if (user?.id) {
+              await supabase.from('downloads').delete()
+                .eq('user_id', user.id)
+                .eq('chapter_id', ch.id);
+            }
+            toast.success("Deleted from library");
+            await load();
+          } catch (e) {
+            toast.error("Could not delete. Try again.");
           }
-          toast.success("Deleted from library");
-          await load();
-        } catch (e) {
-          toast.error("Could not delete. Try again.");
-        }
-      }}
-      className="inline-flex items-center justify-center w-7 h-7 bg-destructive/10 border border-destructive/30 text-destructive rounded-md"
-    >
-      🗑️
-    </button>
-  </div>
+        }}
+              className="inline-flex items-center justify-center w-7 h-7 bg-destructive/10 border border-destructive/30 text-destructive rounded-md"
+            >
+              Delete
+            </button>
+          </div>
                           ) : (
                             <button
                               onClick={() => beginDownload(g, ch)}
