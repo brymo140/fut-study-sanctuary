@@ -54,7 +54,7 @@ useEffect(() => {
   return (
     // Bottom padding reserves space for the bottom nav + AdMob banner + safe-area inset
     // so content is never hidden behind native chrome.
-    <div className="min-h-screen" style={{ paddingBottom: "calc(58px + 50px + var(--sab))" }}>
+    <div className="min-h-screen" style={{ paddingBottom: "calc(58px + var(--sab))" }}>
       <div className={`${isAdmin ? "max-w-5xl mx-auto" : "app-shell"} px-4 pt-4`}>{children}</div>
       {!isAdmin && <AITutor />}
       {!isAdmin && <OnboardingGuide />}
