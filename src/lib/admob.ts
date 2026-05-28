@@ -20,6 +20,9 @@ export const AD_UNITS = {
   interstitial: "ca-app-pub-4988426041877845/8852971003",
   rewarded: "ca-app-pub-4988426041877845/6468533553",
   rewardedInterstitial: "ca-app-pub-4988426041877845/8529692908",
+  homeBanner1: "ca-app-pub-4988426041877845/1752192257",
+  homeBanner2: "ca-app-pub-4988426041877845/5517697355",
+  watchBanner: "ca-app-pub-4988426041877845/4259925775",
 };
 
 export const getAdMobAppId = async (): Promise<string> => {
