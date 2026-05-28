@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Search, X, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PdfCard, PdfSummary } from "@/components/PdfCard";
+import { InlineAdSlot } from "@/components/ads/InlineAdSlot";
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 type Tab = "materials" | "past";
@@ -178,6 +179,8 @@ const Browse = () => {
         ))}
       </div>
 
+      <InlineAdSlot size="banner" />
+
       {filtered.length === 0 ? (
         <div className="surface-card p-8 text-center text-sm text-muted-foreground">
           <SlidersHorizontal className="h-6 w-6 mx-auto mb-2 opacity-60" />
@@ -185,8 +188,11 @@ const Browse = () => {
         </div>
       ) : (
         <div className="space-y-2.5">
-          {filtered.map((p) => (
-            <PdfCard key={p.id} pdf={p} />
+          {filtered.map((p, index) => (
+            <div key={p.id}>
+              {index > 0 && index % 5 === 0 && <InlineAdSlot size="banner" />}
+              <PdfCard pdf={p} />
+            </div>
           ))}
         </div>
       )}

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { withSchemaRetry } from "@/lib/supabaseRetry";
 import { registerNativeAuthDeepLinks } from "@/lib/nativeDeepLinks";
+import { initPushNotifications } from "@/lib/pushNotifications";
 
 interface Profile {
   id: string;
@@ -88,6 +89,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       : null;
 
     setProfile(normalizedProfile);
+
+    if (profileData?.last_active) {
+      const lastActive = new Date(profileData.last_active);
+      const now = new Date();
+      const daysSinceActive = Math.floor((now.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysSinceActive === 2) {
+        setTimeout(() => {
+          toast.warning('⚠️ Your reading streak resets tomorrow! Open HighVault daily to keep it going 🐝');
+        }, 3000);
+      } else if (daysSinceActive >= 3) {
+        await withSchemaRetry(async () => await supabase
+          .from("profiles")
+          .update({ streak: 0 })
+          .eq("id", profileData.id));
+        if (normalizedProfile) {
+          normalizedProfile.streak = 0;
+        }
+      }
+    }
+
+    initPushNotifications(uid);
+
     let admin = !!roles?.some((r) => r.role === "admin");
     const rep = !!roles?.some((r) => r.role === "rep");
 

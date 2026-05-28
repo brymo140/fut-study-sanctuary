@@ -75,7 +75,6 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [scale, setScale] = useState(1.0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [iosUrl, setIosUrl] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTouchDistance = useRef<number | null>(null);
 
@@ -121,13 +120,12 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
 
   useEffect(() => {
     if (!open) {
-  setPdfDoc(null);
-  setTotalPages(0);
-  setError(null);
-  setScale(1.0);
-  setIosUrl(null);
-  return;
-}
+      setPdfDoc(null);
+      setTotalPages(0);
+      setError(null);
+      setScale(1.0);
+      return;
+    }
     loadPdf();
   }, [open, storagePath, chapterId]);
 
@@ -190,26 +188,6 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     setLoading(false);
     return;
   }
-
-  // iOS Safari — use native iframe PDF rendering instead of PDF.js
-  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-  if (ios) {
-  // Fetch PDF data and create blob URL for native Safari rendering
-  try {
-    const response = await fetch(data.signedUrl);
-    if (!response.ok) throw new Error('Fetch failed');
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    setIosUrl(blobUrl);
-  } catch {
-    // Fallback to direct URL if blob fails
-    setIosUrl(data.signedUrl);
-  }
-  setLoading(false);
-  return;
-}
 
   const response = await fetch(data.signedUrl);
   if (!response.ok) {
@@ -325,31 +303,6 @@ style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-i
             </div>
           )}
 
-          {!loading && !error && iosUrl && (
-  <div className="w-full h-full flex flex-col">
-    <div className="flex-1 overflow-hidden">
-      <iframe
-        src={iosUrl}
-        title={title || 'PDF'}
-        style={{
-          width: '100%',
-          height: '100%',
-          border: 'none',
-        }}
-      />
-    </div>
-    <div className="shrink-0 py-2 px-4 bg-surface border-t border-border flex items-center justify-center">
-      <a
-        href={iosUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-xs text-primary flex items-center gap-1"
-      >
-        📄 Open all pages in Safari
-      </a>
-    </div>
-  </div>
-)}
           {!loading && !error && pdfDoc && (
             <div className="flex flex-col items-center">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(num => (

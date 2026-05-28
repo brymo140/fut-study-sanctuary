@@ -181,9 +181,26 @@ const PdfDetail = () => {
         toast.success("✅ Saved to your library!");
       }, 500);
 
-      // Open PDF using the ORIGINAL storage_path — NOT base64 data
-      // PdfViewer will create a proper signed URL from this
-      setViewChapter(ch);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+      if (isIOS) {
+        try {
+          const { data } = await supabase.storage
+            .from('chapters')
+            .createSignedUrl(ch.storage_path, 3600);
+          if (data?.signedUrl) {
+            const { Browser } = await import('@capacitor/browser');
+            await Browser.open({
+              url: data.signedUrl,
+              presentationStyle: 'popover',
+              toolbarColor: '#07080f',
+            });
+          }
+        } catch {}
+      } else {
+        setViewChapter(ch);
+      }
 
     } catch (error) {
       console.error("Download failed:", error);
@@ -193,38 +210,34 @@ const PdfDetail = () => {
   };
 
   const openRead = async (ch: Chapter) => {
-  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-  if (ios) {
-    // iOS — open directly in Safari in-app using Browser plugin
-    try {
-      const { data, error: urlErr } = await supabase.storage
-        .from('chapters')
-        .createSignedUrl(ch.storage_path, 3600);
-
-      if (urlErr || !data?.signedUrl) {
-        toast.error('Could not load PDF. Try again.');
-        return;
+    if (isIOS) {
+      try {
+        toast.info('Opening PDF...');
+        const { data, error: urlErr } = await supabase.storage
+          .from('chapters')
+          .createSignedUrl(ch.storage_path, 3600);
+        if (urlErr || !data?.signedUrl) {
+          toast.error('Could not load PDF. Try again.');
+          return;
+        }
+        const { Browser } = await import('@capacitor/browser');
+        await Browser.open({
+          url: data.signedUrl,
+          presentationStyle: 'popover',
+          toolbarColor: '#07080f',
+        });
+      } catch (e) {
+        console.error('iOS PDF open error:', e);
+        toast.error('Could not open PDF.');
       }
-
-      const { Browser } = await import('@capacitor/browser');
-      await Browser.open({
-        url: data.signedUrl,
-        presentationStyle: 'popover',
-        toolbarColor: '#07080f',
-      });
-      return;
-    } catch (e) {
-      console.error('iOS PDF open failed:', e);
-      toast.error('Could not open PDF.');
       return;
     }
-  }
 
-  // Android — use PdfViewer
-  setViewChapter(ch);
-};
+    setViewChapter(ch);
+  };
 
   const reportFile = async () => {
     if (!user || !id) return;

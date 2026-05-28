@@ -1,73 +1,58 @@
-// Push notification scaffold. Activates on native (Capacitor) automatically;
-// no-ops in the browser. Admin actions also write a row into the in-app
-// notifications table so the bell + toast experience works on the web build.
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { Capacitor } from '@capacitor/core';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 let inited = false;
 
-const isNative = (): boolean => {
-  try {
-    // Lazy require so the build doesn't fail if Capacitor isn't installed.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const cap = (window as any).Capacitor;
-    return !!cap?.isNativePlatform?.();
-  } catch {
-    return false;
-  }
-};
-
 export const initPushNotifications = async (userId: string) => {
-  if (inited || !userId) return;
+  if (!userId || inited) return;
+  if (!Capacitor.isNativePlatform()) return;
   inited = true;
 
-  if (!isNative()) {
-    // Web build — nothing to register. Native push activates automatically
-    // when the project is wrapped with Capacitor.
-    return;
-  }
-
   try {
-    // Dynamic import so web bundles don't fail without the native plugin.
-    // String-built specifier prevents Vite from analyzing/resolving at build time.
-    const spec = ["@capacitor", "push-notifications"].join("/");
-    const mod: any = await import(/* @vite-ignore */ spec).catch(() => null);
-    if (!mod) return;
-    const { PushNotifications } = mod;
+    const { PushNotifications } = await import('@capacitor/push-notifications');
 
-    const permission = await PushNotifications.requestPermissions();
-    if (permission.receive !== "granted") return;
+    const permResult = await PushNotifications.requestPermissions();
+    if (permResult.receive !== 'granted') return;
+
     await PushNotifications.register();
 
-    PushNotifications.addListener("registration", async (token: { value: string }) => {
-      const platform = (window as any).Capacitor?.getPlatform?.() || "unknown";
-      await supabase.from("push_tokens").upsert(
-        { user_id: userId, token: token.value, platform, updated_at: new Date().toISOString() },
-        { onConflict: "user_id,token" }
-      );
+    PushNotifications.addListener('registration', async (token) => {
+      console.log('[Push] Token:', token.value);
+      await supabase.from('push_tokens').upsert({
+        user_id: userId,
+        token: token.value,
+        platform: 'android',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
     });
 
-    PushNotifications.addListener("pushNotificationActionPerformed", (action: any) => {
-      const url = action?.notification?.data?.url;
-      if (url) window.location.href = url;
+    PushNotifications.addListener('pushNotificationReceived', (notification) => {
+      console.log('[Push] Received:', notification);
     });
-  } catch (err) {
-    console.warn("Push notifications init failed", err);
+
+    PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      console.log('[Push] Action:', action);
+      const url = action.notification.data?.url;
+      if (url && window.location.pathname !== url) {
+        window.location.href = url;
+      }
+    });
+  } catch (e) {
+    console.warn('[Push] Init failed:', e);
+    inited = false;
   }
 };
 
 interface PushPayload {
-  target_level: string | null; // "all" or specific level
+  target_level: string | null;
   target_department?: string | null;
   title: string;
   body: string;
   url: string;
 }
 
-// Called from admin actions. Always writes an in-app notification row;
-// also calls the send-push edge function so native devices get OS pushes.
 export const sendPushNotification = async (payload: PushPayload) => {
-  // Best-effort dispatch — never block admin success on this.
   try {
     await supabase.functions.invoke("send-push", { body: payload });
   } catch (err) {

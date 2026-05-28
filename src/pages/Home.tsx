@@ -7,10 +7,10 @@ import { PdfCard, PdfSummary } from "@/components/PdfCard";
 import { AnnouncementsSheet } from "@/components/AnnouncementsSheet";
 import { NotificationsSheet } from "@/components/NotificationsSheet";
 import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
-import { initPushNotifications, maybeShowStudyReminder } from "@/lib/pushNotifications";
+import { maybeShowStudyReminder } from "@/lib/pushNotifications";
 import { cacheData, getCachedData } from "@/lib/cache";
-import { useOnline } from "@/hooks/useOnline";
-import { AdMobBannerSlot } from "@/components/ads/AdMobBannerSlot";
+import { InlineAdSlot } from "@/components/ads/InlineAdSlot";
+import { AD_UNITS } from "@/lib/admob";
 
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
@@ -35,12 +35,9 @@ const Home = () => {
   const [notifOpen, setNotifOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const online = useOnline();
 
-  // Init push notifications on first home load.
   useEffect(() => {
     if (user?.id) {
-      initPushNotifications(user.id);
       maybeShowStudyReminder();
     }
   }, [user?.id]);
@@ -175,6 +172,8 @@ const Home = () => {
         </div>
       </header>
 
+      <InlineAdSlot adUnitId={AD_UNITS.homeBanner1} size="banner" />
+
       {/* Level pills */}
       <div className="flex gap-2 overflow-x-auto scrollbar-hide">
         {LEVELS.map((lvl) => (
@@ -204,7 +203,8 @@ const Home = () => {
           </div>
         )}
       </Section>
-      {online && <AdMobBannerSlot />}
+
+      <InlineAdSlot adUnitId={AD_UNITS.homeBanner2} size="banner" />
 
       <Section
         title="Learning channels"
@@ -237,7 +237,6 @@ const Home = () => {
           </div>
         )}
       </Section>
-      {online && <AdMobBannerSlot />}
 
       <Section title="Recently added" subtitle="Fresh uploads from class reps">
         {recent.length === 0 ? (

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "100120698168",
+    "project_id": "highvault-38556",
+    "storage_bucket": "highvault-38556.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:100120698168:android:9f74e41a974976289b75cd",
+        "android_client_info": {
+          "package_name": "com.highvault.futminna"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBk-cmSeKoJFRIB0xP-hXhpuNnDhk_Jmpo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

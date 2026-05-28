@@ -1,3 +1,0 @@
-com.highvault.futminna.test
-style WhiteBackgroundDialogTheme
-style WhiteBackgroundTheme

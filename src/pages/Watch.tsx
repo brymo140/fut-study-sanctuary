@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Play, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { AdMobBannerSlot } from "@/components/ads/AdMobBannerSlot";
+import { InlineAdSlot } from "@/components/ads/InlineAdSlot";
+import { AD_UNITS } from "@/lib/admob";
 import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
 
 const YT_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
@@ -236,8 +237,7 @@ const Watch = () => {
             ))}
           </div>
 
-          {/* Banner ad */}
-          <AdMobBannerSlot />
+          <InlineAdSlot adUnitId={AD_UNITS.watchBanner} size="banner" />
 
           {/* Featured videos */}
           {featuredVideos.length > 0 && (
