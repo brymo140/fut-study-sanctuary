@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
-import { AITutor } from "@/components/AITutor";
 
 interface Props {
   open: boolean;
@@ -30,7 +29,6 @@ const PdfPage = ({ pdfDoc, pageNum, scale }: { pdfDoc: any; pageNum: number; sca
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d', { willReadFrequently: false });
     if (!context) return;
-    // Safari fix — must set canvas size BEFORE getting context operations
     context.save();
 
     const containerWidth = canvas.parentElement?.clientWidth || window.innerWidth;
@@ -40,7 +38,6 @@ const PdfPage = ({ pdfDoc, pageNum, scale }: { pdfDoc: any; pageNum: number; sca
       scale: (containerWidth / viewport.width) * scale 
     });
 
-    // Fix for Safari/iPhone — use devicePixelRatio for sharp rendering
     canvas.width = Math.floor(scaledViewport.width * pixelRatio);
     canvas.height = Math.floor(scaledViewport.height * pixelRatio);
     canvas.style.width = `${Math.floor(scaledViewport.width)}px`;

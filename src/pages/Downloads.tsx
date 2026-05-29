@@ -6,9 +6,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { PdfViewer } from "@/components/PdfViewer";
 import { isModuleUnlocked, markModuleUnlocked } from "@/lib/sessionUnlocks";
 import { WatchToUnlockModal } from "@/components/WatchToUnlockModal";
-import { savePdfToDevice, readPdfFromDevice } from "@/lib/deviceFiles";
+import { savePdfToDevice } from "@/lib/deviceFiles";
 import { Confetti } from "@/components/ads/Confetti";
 import { toast } from "sonner";
+import { isIOSDevice, openIosPdfUrl } from "@/lib/openIosPdf";
 
 interface Chapter {
   id: string;
@@ -226,13 +227,31 @@ const Downloads = () => {
     }
   };
 
-  const openModule = (g: SubjectGroup, ch: Chapter) => {
-    setView({ ch, subject: g.subject, storagePath: ch.storage_path });
+  const handleReadChapter = async (ch: Chapter, subject: Subject) => {
+    if (isIOSDevice()) {
+      try {
+        toast.info("Opening PDF...");
+        const { data, error: urlErr } = await supabase.storage
+          .from("chapters")
+          .createSignedUrl(ch.storage_path, 3600);
+        if (urlErr || !data?.signedUrl) {
+          toast.error("Could not load PDF. Try again.");
+          return;
+        }
+        await openIosPdfUrl(data.signedUrl);
+      } catch (e) {
+        console.error("iOS PDF open error:", e);
+        toast.error("Could not open PDF.");
+      }
+      return;
+    }
+
+    setView({ ch, subject, storagePath: ch.storage_path });
   };
 
   const beginDownload = (g: SubjectGroup, ch: Chapter) => {
     if (isModuleUnlocked(ch.id)) {
-      setView({ ch, subject: g.subject, storagePath: ch.storage_path });
+      void handleReadChapter(ch, g.subject);
     } else {
       setUnlock({ ch, subject: g.subject });
     }
@@ -314,7 +333,7 @@ const Downloads = () => {
                           {isDownloaded ? (
   <div className="flex items-center gap-1">
     <button
-      onClick={() => openModule(g, ch)}
+      onClick={() => handleReadChapter(ch, g.subject)}
       className="inline-flex items-center gap-1 bg-success/15 border border-success/40 text-success text-[11px] font-bold rounded-md px-2.5 py-1.5"
     >
       <BookOpen className="h-3 w-3" /> Read 📖

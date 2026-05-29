@@ -9,22 +9,9 @@ import { PdfViewer } from "@/components/PdfViewer";
 import { toast } from "sonner";
 import { isModuleUnlocked, markModuleUnlocked } from "@/lib/sessionUnlocks";
 import { savePdfToDevice } from "@/lib/deviceFiles";
+import { isIOSDevice, openIosPdfUrl } from "@/lib/openIosPdf";
 
 const DL_PREFIX = "hv_dl_";
-
-const openIosPdfUrl = async (signedUrl: string) => {
-  const { Capacitor } = await import('@capacitor/core');
-  if (Capacitor.isNativePlatform()) {
-    const { Browser } = await import('@capacitor/browser');
-    await Browser.open({
-      url: signedUrl,
-      presentationStyle: 'popover',
-      toolbarColor: '#07080f',
-    });
-  } else {
-    window.open(signedUrl, '_blank', 'noopener,noreferrer');
-  }
-};
 
 interface Pdf {
   id: string; title: string; course_code: string; level: string;
@@ -195,10 +182,7 @@ const PdfDetail = () => {
         toast.success("✅ Saved to your library!");
       }, 500);
 
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-      if (isIOS) {
+      if (isIOSDevice()) {
         try {
           const { data } = await supabase.storage
             .from('chapters')
@@ -219,10 +203,7 @@ const PdfDetail = () => {
   };
 
   const openRead = async (ch: Chapter) => {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-    if (isIOS) {
+    if (isIOSDevice()) {
       try {
         toast.info('Opening PDF...');
         const { data, error: urlErr } = await supabase.storage

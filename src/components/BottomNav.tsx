@@ -16,8 +16,7 @@ export const BottomNav = () => {
     <nav
       className="fixed left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur-md"
       style={{
-        // Sit ABOVE the AdMob banner (~50px) and respect bottom safe-area inset.
-        bottom: "calc(50px + var(--sab))",
+        bottom: "calc(var(--banner-height) + var(--sab))",
         paddingBottom: "0px",
       }}
     >

@@ -13,8 +13,14 @@
   --sab: env(safe-area-inset-bottom);
   --sal: env(safe-area-inset-left);
   --sar: env(safe-area-inset-right);
-  /* Reserve space for: bottom nav (~58px) + AdMob banner (~50px) + bottom inset */
-  --bottom-chrome: calc(58px + 50px + var(--sab));
+  --nav-height: 58px;
+  --banner-height: 0px;
+  --bottom-chrome: calc(var(--nav-height) + var(--banner-height) + var(--sab));
+}
+
+/* Android APK — persistent AdMob banner above bottom nav */
+html.capacitor-native {
+  --banner-height: 50px;
 }
 
 @layer base {

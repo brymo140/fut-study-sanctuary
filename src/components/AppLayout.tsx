@@ -1,4 +1,5 @@
 import { ReactNode, useEffect } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useLocation } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 import { AITutor } from "./AITutor";
@@ -12,6 +13,12 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
   const isAdmin = pathname.startsWith("/admin");
 
   useEffect(() => {
+    const root = document.documentElement;
+    if (Capacitor.isNativePlatform()) {
+      root.classList.add("capacitor-native");
+    } else {
+      root.classList.remove("capacitor-native");
+    }
     initAdMob();
     setTimeout(() => preloadRewardedAd(), 3000);
   }, []);
@@ -40,7 +47,7 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <div className="min-h-screen" style={{ paddingBottom: "calc(58px + var(--sab))" }}>
+    <div className="min-h-screen" style={{ paddingBottom: "var(--bottom-chrome)" }}>
       <div className={`${isAdmin ? "max-w-5xl mx-auto" : "app-shell"} px-4 pt-4`}>{children}</div>
       {!isAdmin && <AITutor />}
       {!isAdmin && <OnboardingGuide />}
