@@ -172,7 +172,6 @@ const Home = () => {
         </div>
       </header>
 
-      <InlineAdSlot adUnitId={AD_UNITS.homeBanner1} size="banner" />
 
       {/* Level pills */}
       <div className="flex gap-2 overflow-x-auto scrollbar-hide">
@@ -187,6 +186,8 @@ const Home = () => {
         ))}
       </div>
 
+      <InlineAdSlot adUnitId={AD_UNITS.homeBanner1} size="banner" />
+      
       <Section title="Trending this week" subtitle="Most downloaded by your peers">
         {trending.length === 0 ? (
           <EmptyHint text="No trending materials yet. Check back soon." />
