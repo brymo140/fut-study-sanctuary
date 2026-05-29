@@ -12,6 +12,20 @@ import { savePdfToDevice } from "@/lib/deviceFiles";
 
 const DL_PREFIX = "hv_dl_";
 
+const openIosPdfUrl = async (signedUrl: string) => {
+  const { Capacitor } = await import('@capacitor/core');
+  if (Capacitor.isNativePlatform()) {
+    const { Browser } = await import('@capacitor/browser');
+    await Browser.open({
+      url: signedUrl,
+      presentationStyle: 'popover',
+      toolbarColor: '#07080f',
+    });
+  } else {
+    window.open(signedUrl, '_blank', 'noopener,noreferrer');
+  }
+};
+
 interface Pdf {
   id: string; title: string; course_code: string; level: string;
   faculty: string | null; department: string | null; description: string | null;
@@ -190,12 +204,7 @@ const PdfDetail = () => {
             .from('chapters')
             .createSignedUrl(ch.storage_path, 3600);
           if (data?.signedUrl) {
-            const { Browser } = await import('@capacitor/browser');
-            await Browser.open({
-              url: data.signedUrl,
-              presentationStyle: 'popover',
-              toolbarColor: '#07080f',
-            });
+            await openIosPdfUrl(data.signedUrl);
           }
         } catch {}
       } else {
@@ -223,12 +232,7 @@ const PdfDetail = () => {
           toast.error('Could not load PDF. Try again.');
           return;
         }
-        const { Browser } = await import('@capacitor/browser');
-        await Browser.open({
-          url: data.signedUrl,
-          presentationStyle: 'popover',
-          toolbarColor: '#07080f',
-        });
+        await openIosPdfUrl(data.signedUrl);
       } catch (e) {
         console.error('iOS PDF open error:', e);
         toast.error('Could not open PDF.');
