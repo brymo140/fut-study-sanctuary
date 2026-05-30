@@ -47,7 +47,7 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <div className="min-h-screen" style={{ paddingBottom: "var(--bottom-chrome)" }}>
+    <div className="min-h-screen" style={{ paddingBottom: "calc(90px + var(--sab))" }}>
       <div className={`${isAdmin ? "max-w-5xl mx-auto" : "app-shell"} px-4 pt-4`}>{children}</div>
       {!isAdmin && <AITutor />}
       {!isAdmin && <OnboardingGuide />}
