@@ -19,6 +19,13 @@ export const BottomNav = () => {
         bottom: "calc(var(--banner-height) + var(--sab))",
         paddingBottom: "0px",
       }}
+      className="... rounded-[24px]"
+style={{ 
+  left: '16px', 
+  right: '16px', 
+  width: 'auto',
+  borderRadius: '24px'
+}}
     >
       <div className="app-shell">
         <ul className="grid grid-cols-5">

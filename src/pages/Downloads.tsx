@@ -347,7 +347,7 @@ const Downloads = () => {
         }}
               className="inline-flex items-center justify-center w-7 h-7 bg-destructive/10 border border-destructive/30 text-destructive rounded-md"
             >
-              Delete
+              🗑️
             </button>
           </div>
                           ) : (
