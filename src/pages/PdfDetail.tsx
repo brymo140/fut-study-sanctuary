@@ -9,7 +9,6 @@ import { PdfViewer } from "@/components/PdfViewer";
 import { toast } from "sonner";
 import { isModuleUnlocked, markModuleUnlocked } from "@/lib/sessionUnlocks";
 import { savePdfToDevice } from "@/lib/deviceFiles";
-import { isIOSDevice, openIosPdfUrl } from "@/lib/openIosPdf";
 
 const DL_PREFIX = "hv_dl_";
 
@@ -181,19 +180,9 @@ const PdfDetail = () => {
         setDownloadingChapter(null);
         toast.success("✅ Saved to your library!");
       }, 500);
-
-      if (isIOSDevice()) {
-        try {
-          const { data } = await supabase.storage
-            .from('chapters')
-            .createSignedUrl(ch.storage_path, 3600);
-          if (data?.signedUrl) {
-            await openIosPdfUrl(data.signedUrl);
-          }
-        } catch {}
-      } else {
-        setViewChapter(ch);
-      }
+      
+      // Simple version: no iOS special handling here anymore
+      setViewChapter(ch);
 
     } catch (error) {
       console.error("Download failed:", error);
@@ -202,27 +191,9 @@ const PdfDetail = () => {
     }
   };
 
-  const openRead = async (ch: Chapter) => {
-    if (isIOSDevice()) {
-      try {
-        toast.info('Opening PDF...');
-        const { data, error: urlErr } = await supabase.storage
-          .from('chapters')
-          .createSignedUrl(ch.storage_path, 3600);
-        if (urlErr || !data?.signedUrl) {
-          toast.error('Could not load PDF. Try again.');
-          return;
-        }
-        await openIosPdfUrl(data.signedUrl);
-      } catch (e) {
-        console.error('iOS PDF open error:', e);
-        toast.error('Could not open PDF.');
-      }
-      return;
-    }
-
-    setViewChapter(ch);
-  };
+ const openRead = (ch: Chapter) => {
+  setViewChapter(ch);
+};
 
   const reportFile = async () => {
     if (!user || !id) return;
