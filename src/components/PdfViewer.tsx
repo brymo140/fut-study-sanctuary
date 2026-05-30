@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
+import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -15,63 +15,19 @@ const isIOS = () =>
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-const PdfPage = ({ pdfDoc, pageNum, scale }: {
-  pdfDoc: any; pageNum: number; scale: number;
-}) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const renderTaskRef = useRef<any>(null);
-
-  useEffect(() => {
-    renderPage();
-    return () => {
-      if (renderTaskRef.current) try { renderTaskRef.current.cancel(); } catch {}
-    };
-  }, [pdfDoc, pageNum, scale]);
-
-  const renderPage = async () => {
-    if (!pdfDoc || !canvasRef.current) return;
-    if (renderTaskRef.current) try { renderTaskRef.current.cancel(); } catch {}
-    try {
-      const page = await pdfDoc.getPage(pageNum);
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      const containerWidth = (canvas.parentElement?.clientWidth || window.innerWidth) - 32;
-      const baseViewport = page.getViewport({ scale: 1 });
-      const finalScale = (containerWidth / baseViewport.width) * scale;
-      const viewport = page.getViewport({ scale: finalScale });
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.floor(viewport.width * dpr);
-      canvas.height = Math.floor(viewport.height * dpr);
-      canvas.style.width = `${Math.floor(viewport.width)}px`;
-      canvas.style.height = `${Math.floor(viewport.height)}px`;
-      canvas.style.display = 'block';
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      renderTaskRef.current = page.render({ canvasContext: ctx, viewport });
-      await renderTaskRef.current.promise;
-    } catch (e: any) {
-      if (e?.name !== 'RenderingCancelledException') console.error('[PdfPage]', e);
-    }
-  };
-
-  return (
-    <div className="shadow-lg mb-4 bg-white">
-      <canvas ref={canvasRef} />
-    </div>
-  );
-};
-
 export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }: Props) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [totalPages, setTotalPages] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [scale, setScale] = useState(1.0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [embedUrl, setEmbedUrl] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [pageRendering, setPageRendering] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const renderTaskRef = useRef<any>(null);
   const lastTouchDistance = useRef<number | null>(null);
+  const ios = isIOS();
 
   useEffect(() => {
     const onOnline = () => setIsOffline(false);
@@ -90,7 +46,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
       setTotalPages(0);
       setError(null);
       setScale(1.0);
-      setEmbedUrl(null);
+      setCurrentPage(1);
       return;
     }
     loadPdf();
@@ -103,16 +59,55 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     return () => document.removeEventListener('contextmenu', block);
   }, [open]);
 
+  // Render page whenever pdfDoc, currentPage, or scale changes
+  useEffect(() => {
+    if (pdfDoc) renderPage(pdfDoc, currentPage, scale);
+  }, [pdfDoc, currentPage, scale]);
+
+  const renderPage = async (doc: any, pageNum: number, sc: number) => {
+    if (!canvasRef.current || !doc) return;
+    if (renderTaskRef.current) {
+      try { renderTaskRef.current.cancel(); } catch {}
+    }
+    setPageRendering(true);
+    try {
+      const page = await doc.getPage(pageNum);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const containerWidth = (canvas.parentElement?.clientWidth || window.innerWidth) - 32;
+      const baseViewport = page.getViewport({ scale: 1 });
+      // iOS: cap scale at 1.5 to avoid memory overflow
+      const maxScale = ios ? Math.min(sc, 1.5) : sc;
+      const finalScale = (containerWidth / baseViewport.width) * maxScale;
+      const viewport = page.getViewport({ scale: finalScale });
+      // iOS: no devicePixelRatio multiplication — that is what causes blank canvas
+      const dpr = ios ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(viewport.width * dpr);
+      canvas.height = Math.floor(viewport.height * dpr);
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+      canvas.style.display = 'block';
+      canvas.style.margin = '0 auto';
+      if (dpr !== 1) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      renderTaskRef.current = page.render({ canvasContext: ctx, viewport });
+      await renderTaskRef.current.promise;
+    } catch (e: any) {
+      if (e?.name !== 'RenderingCancelledException') console.error('[PdfViewer]', e);
+    }
+    setPageRendering(false);
+  };
+
   const loadPdf = async () => {
     setLoading(true);
     setError(null);
     setPdfDoc(null);
-    setEmbedUrl(null);
+    setCurrentPage(1);
 
     try {
       let pdfData: ArrayBuffer | null = null;
 
-      // Check local cache first
       if (chapterId) {
         const cachedFile = localStorage.getItem(`hv_dl_${chapterId}`);
         if (cachedFile && !cachedFile.startsWith('data:')) {
@@ -136,22 +131,12 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
 
       if (!pdfData && storagePath) {
         const { data, error: urlErr } = await supabase.storage
-          .from('chapters')
-          .createSignedUrl(storagePath, 3600);
+          .from('chapters').createSignedUrl(storagePath, 3600);
         if (urlErr || !data?.signedUrl) {
           setError('Could not load PDF. Please try again.');
           setLoading(false);
           return;
         }
-
-        // iOS — use embed with signed URL (native Safari PDF renderer, all pages)
-        if (isIOS()) {
-          setEmbedUrl(data.signedUrl);
-          setLoading(false);
-          return;
-        }
-
-        // Android — fetch and render with PDF.js
         const resp = await fetch(data.signedUrl);
         if (!resp.ok) { setError('Failed to fetch PDF.'); setLoading(false); return; }
         pdfData = await resp.arrayBuffer();
@@ -159,19 +144,25 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
 
       if (!pdfData) { setError('No PDF data available.'); setLoading(false); return; }
 
-      // PDF.js rendering (Android + offline both platforms)
       const pdfjsLib = await import('pdfjs-dist');
       pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-      const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+      // iOS: disable range requests to reduce memory fragmentation
+      const pdf = await pdfjsLib.getDocument({
+        data: pdfData,
+        disableRange: ios,
+        disableStream: ios,
+      }).promise;
       setPdfDoc(pdf);
       setTotalPages(pdf.numPages);
     } catch (e: any) {
       console.error('[PdfViewer]', e);
       setError('Failed to load PDF. Please try again.');
     }
-
     setLoading(false);
   };
+
+  const goToPrev = () => setCurrentPage(p => Math.max(1, p - 1));
+  const goToNext = () => setCurrentPage(p => Math.min(totalPages, p + 1));
 
   const getTouchDistance = (t: React.TouchList) => {
     const dx = t[0].clientX - t[1].clientX;
@@ -206,31 +197,54 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           </div>
         </div>
 
-        {/* Zoom toolbar — Android PDF.js only */}
+        {/* Toolbar */}
         {!loading && !error && pdfDoc && totalPages > 0 && (
-          <div className="flex items-center justify-center gap-3 py-2 bg-surface border-b border-border shrink-0">
-            <button onClick={() => setScale(s => Math.max(0.5, parseFloat((s - 0.25).toFixed(2))))}
-              className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-surface-elevated border border-border">
-              <ZoomOut className="h-4 w-4" />
-            </button>
-            <span className="text-xs font-mono text-muted-foreground min-w-12 text-center">
-              {Math.round(scale * 100)}%
-            </span>
-            <button onClick={() => setScale(s => Math.min(3, parseFloat((s + 0.25).toFixed(2))))}
-              className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-surface-elevated border border-border">
-              <ZoomIn className="h-4 w-4" />
-            </button>
-            <div className="w-px h-4 bg-border mx-1" />
-            <span className="text-xs text-muted-foreground">{totalPages} page{totalPages !== 1 ? 's' : ''}</span>
+          <div className="flex items-center justify-between px-3 py-2 bg-surface border-b border-border shrink-0">
+            {/* Page navigation */}
+            <div className="flex items-center gap-2">
+              <button onClick={goToPrev} disabled={currentPage <= 1}
+                className="h-8 w-8 rounded-lg flex items-center justify-center border border-border disabled:opacity-40">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-xs text-muted-foreground min-w-16 text-center">
+                {currentPage} / {totalPages}
+              </span>
+              <button onClick={goToNext} disabled={currentPage >= totalPages}
+                className="h-8 w-8 rounded-lg flex items-center justify-center border border-border disabled:opacity-40">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            {/* Zoom */}
+            <div className="flex items-center gap-2">
+              <button onClick={() => setScale(s => Math.max(0.5, parseFloat((s - 0.25).toFixed(2))))}
+                className="h-8 w-8 rounded-lg flex items-center justify-center border border-border">
+                <ZoomOut className="h-4 w-4" />
+              </button>
+              <span className="text-xs font-mono text-muted-foreground w-10 text-center">
+                {Math.round(scale * 100)}%
+              </span>
+              <button onClick={() => setScale(s => Math.min(3, parseFloat((s + 0.25).toFixed(2))))}
+                className="h-8 w-8 rounded-lg flex items-center justify-center border border-border">
+                <ZoomIn className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )}
 
         {/* Content */}
         <div
-          ref={containerRef}
-          className="flex-1 min-h-0 bg-slate-900 select-none relative"
+          className="flex-1 min-h-0 overflow-auto bg-slate-900 select-none p-4 relative"
           onContextMenu={e => e.preventDefault()}
           style={{ WebkitTouchCallout: 'none' } as any}
+          onTouchStart={e => { if (e.touches.length === 2) lastTouchDistance.current = getTouchDistance(e.touches); }}
+          onTouchMove={e => {
+            if (e.touches.length === 2 && lastTouchDistance.current) {
+              const d = getTouchDistance(e.touches);
+              setScale(s => Math.min(3, Math.max(0.5, s * (d / lastTouchDistance.current!))));
+              lastTouchDistance.current = d;
+            }
+          }}
+          onTouchEnd={() => { lastTouchDistance.current = null; }}
         >
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
@@ -249,34 +263,22 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
             </div>
           )}
 
-          {/* iOS — embed tag, Safari renders natively with all pages */}
-          {!loading && !error && embedUrl && (
-            <embed
-              src={embedUrl}
-              type="application/pdf"
-              style={{ width: '100%', height: '100%', display: 'block' }}
-            />
-          )}
-
-          {/* Android + Offline — PDF.js canvas */}
           {!loading && !error && pdfDoc && (
-            <div
-              className="h-full overflow-auto p-4"
-              onTouchStart={e => { if (e.touches.length === 2) lastTouchDistance.current = getTouchDistance(e.touches); }}
-              onTouchMove={e => {
-                if (e.touches.length === 2 && lastTouchDistance.current) {
-                  const d = getTouchDistance(e.touches);
-                  setScale(s => Math.min(3, Math.max(0.5, s * (d / lastTouchDistance.current!))));
-                  lastTouchDistance.current = d;
-                }
-              }}
-              onTouchEnd={() => { lastTouchDistance.current = null; }}
-            >
-              <div className="flex flex-col items-center">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(num => (
-                  <PdfPage key={`${num}-${scale}`} pdfDoc={pdfDoc} pageNum={num} scale={scale} />
-                ))}
+            <div className="flex flex-col items-center">
+              {pageRendering && (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 z-10">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              )}
+              <div className="shadow-lg bg-white">
+                <canvas ref={canvasRef} />
               </div>
+              {/* Swipe hint for iOS */}
+              {ios && totalPages > 1 && (
+                <p className="text-xs text-muted-foreground mt-4 text-center">
+                  Use ← → buttons to navigate pages
+                </p>
+              )}
             </div>
           )}
         </div>
