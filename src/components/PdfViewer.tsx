@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -24,6 +24,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
   const [scale, setScale] = useState(1.0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [pageRendering, setPageRendering] = useState(false);
+  const [iosSignedUrl, setIosSignedUrl] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
   const lastTouchDistance = useRef<number | null>(null);
@@ -47,6 +48,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
       setError(null);
       setScale(1.0);
       setCurrentPage(1);
+      setIosSignedUrl(null);
       return;
     }
     loadPdf();
@@ -59,7 +61,6 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     return () => document.removeEventListener('contextmenu', block);
   }, [open]);
 
-  // Render page whenever pdfDoc, currentPage, or scale changes
   useEffect(() => {
     if (pdfDoc) renderPage(pdfDoc, currentPage, scale);
   }, [pdfDoc, currentPage, scale]);
@@ -77,11 +78,9 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
       if (!ctx) return;
       const containerWidth = (canvas.parentElement?.clientWidth || window.innerWidth) - 32;
       const baseViewport = page.getViewport({ scale: 1 });
-      // iOS: cap scale at 1.5 to avoid memory overflow
-      const maxScale = ios ? Math.min(sc, 1.5) : sc;
-      const finalScale = (containerWidth / baseViewport.width) * maxScale;
+      const maxSc = ios ? Math.min(sc, 1.2) : sc;
+      const finalScale = (containerWidth / baseViewport.width) * maxSc;
       const viewport = page.getViewport({ scale: finalScale });
-      // iOS: no devicePixelRatio multiplication — that is what causes blank canvas
       const dpr = ios ? 1 : Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.floor(viewport.width * dpr);
       canvas.height = Math.floor(viewport.height * dpr);
@@ -103,6 +102,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     setLoading(true);
     setError(null);
     setPdfDoc(null);
+    setIosSignedUrl(null);
     setCurrentPage(1);
 
     try {
@@ -137,6 +137,14 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           setLoading(false);
           return;
         }
+
+        // iOS online — store URL and show open button (Safari renders perfectly)
+        if (ios && !pdfData) {
+          setIosSignedUrl(data.signedUrl);
+          setLoading(false);
+          return;
+        }
+
         const resp = await fetch(data.signedUrl);
         if (!resp.ok) { setError('Failed to fetch PDF.'); setLoading(false); return; }
         pdfData = await resp.arrayBuffer();
@@ -146,7 +154,6 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
 
       const pdfjsLib = await import('pdfjs-dist');
       pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-      // iOS: disable range requests to reduce memory fragmentation
       const pdf = await pdfjsLib.getDocument({
         data: pdfData,
         disableRange: ios,
@@ -161,13 +168,8 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     setLoading(false);
   };
 
-  const goToPrev = () => setCurrentPage(p => Math.max(1, p - 1));
-  const goToNext = () => setCurrentPage(p => Math.min(totalPages, p + 1));
-
-  const getTouchDistance = (t: React.TouchList) => {
-    const dx = t[0].clientX - t[1].clientX;
-    const dy = t[0].clientY - t[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
+  const openInSafari = () => {
+    if (iosSignedUrl) window.open(iosSignedUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -197,24 +199,22 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           </div>
         </div>
 
-        {/* Toolbar */}
+        {/* Toolbar for Android PDF.js */}
         {!loading && !error && pdfDoc && totalPages > 0 && (
           <div className="flex items-center justify-between px-3 py-2 bg-surface border-b border-border shrink-0">
-            {/* Page navigation */}
             <div className="flex items-center gap-2">
-              <button onClick={goToPrev} disabled={currentPage <= 1}
+              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage <= 1}
                 className="h-8 w-8 rounded-lg flex items-center justify-center border border-border disabled:opacity-40">
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="text-xs text-muted-foreground min-w-16 text-center">
                 {currentPage} / {totalPages}
               </span>
-              <button onClick={goToNext} disabled={currentPage >= totalPages}
+              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}
                 className="h-8 w-8 rounded-lg flex items-center justify-center border border-border disabled:opacity-40">
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
-            {/* Zoom */}
             <div className="flex items-center gap-2">
               <button onClick={() => setScale(s => Math.max(0.5, parseFloat((s - 0.25).toFixed(2))))}
                 className="h-8 w-8 rounded-lg flex items-center justify-center border border-border">
@@ -236,10 +236,10 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           className="flex-1 min-h-0 overflow-auto bg-slate-900 select-none p-4 relative"
           onContextMenu={e => e.preventDefault()}
           style={{ WebkitTouchCallout: 'none' } as any}
-          onTouchStart={e => { if (e.touches.length === 2) lastTouchDistance.current = getTouchDistance(e.touches); }}
+          onTouchStart={e => { if (e.touches.length === 2) lastTouchDistance.current = Math.sqrt(Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) + Math.pow(e.touches[0].clientY - e.touches[1].clientY, 2)); }}
           onTouchMove={e => {
             if (e.touches.length === 2 && lastTouchDistance.current) {
-              const d = getTouchDistance(e.touches);
+              const d = Math.sqrt(Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) + Math.pow(e.touches[0].clientY - e.touches[1].clientY, 2));
               setScale(s => Math.min(3, Math.max(0.5, s * (d / lastTouchDistance.current!))));
               lastTouchDistance.current = d;
             }
@@ -263,6 +263,32 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
             </div>
           )}
 
+          {/* iOS — clean open button, Safari renders all pages perfectly */}
+          {!loading && !error && iosSignedUrl && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-8 text-center">
+              <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <BookOpen className="h-10 w-10 text-primary" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-foreground mb-2">{title || 'PDF Document'}</p>
+                <p className="text-sm text-muted-foreground">
+                  Tap below to read this document with full page navigation and zoom.
+                </p>
+              </div>
+              <button
+                onClick={openInSafari}
+                className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-semibold text-sm active:scale-95 transition-transform"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open PDF Reader
+              </button>
+              <p className="text-xs text-muted-foreground">
+                Opens in Safari · Tap Done to return to HighVault
+              </p>
+            </div>
+          )}
+
+          {/* Android + Offline — PDF.js one page at a time */}
           {!loading && !error && pdfDoc && (
             <div className="flex flex-col items-center">
               {pageRendering && (
@@ -273,12 +299,6 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
               <div className="shadow-lg bg-white">
                 <canvas ref={canvasRef} />
               </div>
-              {/* Swipe hint for iOS */}
-              {ios && totalPages > 1 && (
-                <p className="text-xs text-muted-foreground mt-4 text-center">
-                  Use ← → buttons to navigate pages
-                </p>
-              )}
             </div>
           )}
         </div>
