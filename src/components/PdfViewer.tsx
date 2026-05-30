@@ -172,6 +172,27 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     if (iosSignedUrl) window.open(iosSignedUrl, '_blank', 'noopener,noreferrer');
   };
 
+  // helper calculation
+  const getTouchDistance = (touches: React.TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // the missing handle touch move function
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      const newDistance = getTouchDistance(e.touches);
+      const ratio = newDistance / lastTouchDistance.current;
+      lastTouchDistance.current = newDistance;
+      // Update visual scale instantly without re-rendering
+      setScale(s => {
+        const next = Math.min(3, Math.max(0.5, s * ratio));
+        return parseFloat(next.toFixed(3));
+      });
+    }
+  };
+  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -296,7 +317,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               )}
-              <div className="shadow-lg bg-white">
+              <div className="shadow-lg bg-white" style={{ transition: 'transform 0.1s ease-out', willChange: 'transform' }}>
                 <canvas ref={canvasRef} />
               </div>
             </div>
