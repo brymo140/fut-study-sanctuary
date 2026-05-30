@@ -9,7 +9,7 @@ import { WatchToUnlockModal } from "@/components/WatchToUnlockModal";
 import { savePdfToDevice } from "@/lib/deviceFiles";
 import { Confetti } from "@/components/ads/Confetti";
 import { toast } from "sonner";
-import { isIOSDevice, openIosPdfUrl } from "@/lib/openIosPdf";
+
 
 interface Chapter {
   id: string;
@@ -227,25 +227,8 @@ const Downloads = () => {
     }
   };
 
-  const handleReadChapter = async (ch: Chapter, subject: Subject) => {
-    if (isIOSDevice()) {
-      try {
-        toast.info("Opening PDF...");
-        const { data, error: urlErr } = await supabase.storage
-          .from("chapters")
-          .createSignedUrl(ch.storage_path, 3600);
-        if (urlErr || !data?.signedUrl) {
-          toast.error("Could not load PDF. Try again.");
-          return;
-        }
-        await openIosPdfUrl(data.signedUrl);
-      } catch (e) {
-        console.error("iOS PDF open error:", e);
-        toast.error("Could not open PDF.");
-      }
-      return;
-    }
-
+    const handleReadChapter = async (ch: Chapter, subject: Subject) => {
+    // Simple version: No iOS detection checks. Let PdfViewer handle everything.
     setView({ ch, subject, storagePath: ch.storage_path });
   };
 
