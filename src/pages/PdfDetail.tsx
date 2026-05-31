@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-//import { ArrowLeft, FileText, Star, Lock, Play, Check, ShieldCheck, Bookmark, Flag, BookOpen } from "lucide-react";
+import { ArrowLeft, FileText, Star, Play, Check, ShieldCheck, Bookmark, Flag, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,7 +47,7 @@ const PdfDetail = () => {
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   );
-  
+
   const fileNameForChapter = (ch: Chapter) =>
     `${pdf?.course_code || "HV"}-M${ch.chapter_number}-${ch.title}.pdf`;
 
@@ -68,14 +68,12 @@ const PdfDetail = () => {
     setBookmarked(!!bm);
     setRatings((rt as Rating[]) || []);
 
-    // Check localStorage first for fast load
     const localDownloaded = new Set<string>();
     for (const c of chaptersData) {
       if (localStorage.getItem(`${DL_PREFIX}${c.id}`)) localDownloaded.add(c.id);
     }
     setDownloadedChapterIds(localDownloaded);
 
-    // Reconcile with Supabase downloads table
     try {
       const { data: dlsAll } = await supabase
         .from("downloads")
@@ -126,6 +124,45 @@ const PdfDetail = () => {
     }
   };
 
+  // Opens PDF on iOS by loading from local cache or signed URL
+  const openIosPdf = async (ch: Chapter) => {
+    try {
+      const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
+      if (cachedFile && !cachedFile.startsWith('data:')) {
+        try {
+          const { Filesystem, Directory } = await import('@capacitor/filesystem');
+          await Filesystem.stat({
+            path: `highvault/chapters/${cachedFile}`,
+            directory: Directory.Cache,
+          });
+          const result = await Filesystem.readFile({
+            path: `highvault/chapters/${cachedFile}`,
+            directory: Directory.Cache,
+          });
+          const base64 = result.data as string;
+          const byteChars = atob(base64);
+          const byteArr = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+          const blob = new Blob([byteArr], { type: 'application/pdf' });
+          window.open(URL.createObjectURL(blob), '_blank');
+          return;
+        } catch {
+          localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
+        }
+      }
+      // Fallback to signed URL
+      const { data } = await supabase.storage
+        .from('chapters').createSignedUrl(ch.storage_path, 3600);
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      } else {
+        toast.error('Could not open PDF. Try again.');
+      }
+    } catch {
+      toast.error('Could not open PDF.');
+    }
+  };
+
   const handleUnlocked = async () => {
     const ch = unlockChapter;
     if (!ch || !user || !id) return;
@@ -134,25 +171,21 @@ const PdfDetail = () => {
     setTick((t) => t + 1);
 
     const fileName = fileNameForChapter(ch);
-
     setDownloadProgress(0);
     setDownloadingChapter(ch.id);
 
     try {
       setDownloadProgress(30);
 
-      // Get public URL for downloading
       const { data: urlData } = supabase.storage
         .from("chapters")
         .getPublicUrl(ch.storage_path);
 
       setDownloadProgress(70);
 
-      // Save to device
       const safeFileName = await savePdfToDevice(urlData.publicUrl, fileName);
       localStorage.setItem(`${DL_PREFIX}${ch.id}`, safeFileName);
 
-      // Save to downloads table
       try {
         await supabase.from("downloads").insert({
           user_id: user.id,
@@ -162,7 +195,6 @@ const PdfDetail = () => {
         console.error("[PdfDetail] downloads insert failed", dlErr);
       }
 
-      // Update XP
       try {
         const { data: prof } = await supabase
           .from("profiles")
@@ -185,25 +217,10 @@ const PdfDetail = () => {
         setDownloadingChapter(null);
         toast.success("✅ Saved to your library!");
       }, 500);
-      
-      // After successful download, open for reading
+
+      // Open PDF after download
       if (ios) {
-        try {
-          const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
-          if (cachedFile) {
-            const { Filesystem, Directory } = await import('@capacitor/filesystem');
-            const result = await Filesystem.readFile({
-              path: `highvault/chapters/${cachedFile}`,
-              directory: Directory.Cache,
-            });
-            const base64 = result.data as string;
-            const byteChars = atob(base64);
-            const byteArr = new Uint8Array(byteChars.length);
-            for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-            const blob = new Blob([byteArr], { type: 'application/pdf' });
-            window.open(URL.createObjectURL(blob), '_blank');
-          }
-        } catch {}
+        await openIosPdf(ch);
       } else {
         setViewChapter(ch);
       }
@@ -215,50 +232,13 @@ const PdfDetail = () => {
     }
   };
 
- const openRead = async (ch: Chapter) => {
-  if (ios) {
-    try {
-      // Try local cache first
-      const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
-      if (cachedFile && !cachedFile.startsWith('data:')) {
-        try {
-          const { Filesystem, Directory } = await import('@capacitor/filesystem');
-          await Filesystem.stat({
-            path: `highvault/chapters/${cachedFile}`,
-            directory: Directory.Cache,
-          });
-          const result = await Filesystem.readFile({
-            path: `highvault/chapters/${cachedFile}`,
-            directory: Directory.Cache,
-          });
-          const base64 = result.data as string;
-          const byteChars = atob(base64);
-          const byteArr = new Uint8Array(byteChars.length);
-          for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-          const blob = new Blob([byteArr], { type: 'application/pdf' });
-          const blobUrl = URL.createObjectURL(blob);
-          window.open(blobUrl, '_blank');
-          return;
-        } catch {
-          localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
-        }
-      }
-      // Not cached — use signed URL
-      const { data } = await supabase.storage
-        .from('chapters').createSignedUrl(ch.storage_path, 3600);
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
-      } else {
-        toast.error('Could not open PDF. Try again.');
-      }
-    } catch {
-      toast.error('Could not open PDF.');
+  const openRead = async (ch: Chapter) => {
+    if (ios) {
+      await openIosPdf(ch);
+      return;
     }
-    return;
-  }
-  // Android
-  setViewChapter(ch);
-};
+    setViewChapter(ch);
+  };
 
   const reportFile = async () => {
     if (!user || !id) return;
@@ -412,7 +392,9 @@ const PdfDetail = () => {
             Modules / Topics — download each one to start reading.
           </h2>
           <p className="text-[11px] text-muted-foreground mb-3">
-            📖 Download once, then read from your library.
+            {ios
+              ? "📖 Download once, then open from your library in Safari."
+              : "📖 Download once, then read from your library."}
           </p>
           {chapters.length === 0 ? (
             <div className="surface-card p-6 text-center text-sm text-muted-foreground">
@@ -450,14 +432,14 @@ const PdfDetail = () => {
                       </div>
                       {isDownloaded ? (
                         <Button
-                        size="sm"
-                        onClick={() => openRead(ch)}
-                        variant="outline"
-                        className="bg-surface border-success/40 text-success text-xs h-8"
-                      >
-                        <BookOpen className="h-3 w-3 mr-1" />
-                        {ios ? '📖 Open PDF' : 'Read 📖'}
-                      </Button>
+                          size="sm"
+                          onClick={() => openRead(ch)}
+                          variant="outline"
+                          className="bg-surface border-success/40 text-success text-xs h-8"
+                        >
+                          <BookOpen className="h-3 w-3 mr-1" />
+                          {ios ? 'Open PDF' : 'Read 📖'}
+                        </Button>
                       ) : (
                         <Button
                           size="sm"
@@ -468,9 +450,6 @@ const PdfDetail = () => {
                         </Button>
                       )}
                     </div>
-                    {/*<p className="text-[10px] text-muted-foreground mt-2 inline-flex items-center gap-1">
-                      <Lock className="h-2.5 w-2.5" /> Download requred to start reading.
-                    </p>*/}
                   </div>
                 );
               })}
