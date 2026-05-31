@@ -531,7 +531,7 @@ const PdfDetail = () => {
               <p className="font-semibold text-sm">PDF Ready</p>
               <p className="text-xs text-muted-foreground mt-1">Tap below to open in Safari reader</p>
             </div>
-            
+            <a
               href={iosPdfUrl}
               target="_blank"
               rel="noopener noreferrer"
