@@ -33,7 +33,7 @@ interface SubjectGroup {
   subject: Subject;
   chapters: Chapter[];
   downloadedChapterIds: Set<string>;
-  localPaths: Record<string, string>; // chapter_id -> local uri
+  localPaths: Record<string, string>;
 }
 
 interface Bookmarked {
@@ -72,10 +72,10 @@ const Downloads = () => {
   const [loading, setLoading] = useState(true);
 
   const ios = typeof navigator !== 'undefined' && (
-  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-);
-  
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+
   const CACHE_KEY_DOWNLOADS = 'hv_cache_downloads';
   const CACHE_KEY_BOOKMARKS = 'hv_cache_bookmarks';
 
@@ -202,7 +202,7 @@ const Downloads = () => {
       const uri = await savePdfToDevice(data.publicUrl, fileName);
       localStorage.setItem(`${DL_PREFIX}${ch.id}`, fileName);
       saveLocalPath(ch.id, uri);
-      
+
       const { error: dlErr } = await supabase.from("downloads").insert({
         user_id: user.id,
         chapter_id: ch.id,
@@ -227,41 +227,53 @@ const Downloads = () => {
       console.error(e);
       toast.error("Couldn't save the file. Try again.");
     } finally {
-      // FIXED: Corrected spelling to "finally"
       setDownloading(null);
     }
   };
 
-  {/*const handleReadChapter = async (ch: Chapter, subject: Subject) => {
-    // Simple version: No iOS detection checks. Let PdfViewer handle everything.
-    setView({ ch, subject, storagePath: ch.storage_path });
-  };*/}
-
-  const handleRead = async (ch: any, subject: any) => {
-  if (ios) {
-    try {
-      const cachedFile = localStorage.getItem(`hv_dl_${ch.id}`);
-      if (cachedFile) {
-        const { Filesystem, Directory } = await import('@capacitor/filesystem');
-        const result = await Filesystem.readFile({
-          path: `highvault/chapters/${cachedFile}`,
-          directory: Directory.Cache,
-        });
-        const base64 = result.data as string;
-        const byteChars = atob(base64);
-        const byteArr = new Uint8Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-        const blob = new Blob([byteArr], { type: 'application/pdf' });
-        window.open(URL.createObjectURL(blob), '_blank');
-        return;
+  // Opens a downloaded PDF — iOS uses Safari, Android uses PdfViewer
+  const handleReadChapter = async (ch: Chapter, subject: Subject) => {
+    if (ios) {
+      try {
+        const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
+        if (cachedFile && !cachedFile.startsWith('data:')) {
+          try {
+            const { Filesystem, Directory } = await import('@capacitor/filesystem');
+            await Filesystem.stat({
+              path: `highvault/chapters/${cachedFile}`,
+              directory: Directory.Cache,
+            });
+            const result = await Filesystem.readFile({
+              path: `highvault/chapters/${cachedFile}`,
+              directory: Directory.Cache,
+            });
+            const base64 = result.data as string;
+            const byteChars = atob(base64);
+            const byteArr = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+            const blob = new Blob([byteArr], { type: 'application/pdf' });
+            window.open(URL.createObjectURL(blob), '_blank');
+            return;
+          } catch {
+            localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
+          }
+        }
+        // Fallback to signed URL
+        const { data } = await supabase.storage
+          .from('chapters').createSignedUrl(ch.storage_path, 3600);
+        if (data?.signedUrl) {
+          window.open(data.signedUrl, '_blank');
+        } else {
+          toast.error('File not found. Try downloading again.');
+        }
+      } catch {
+        toast.error('Could not open PDF.');
       }
-    } catch {}
-    toast.error('File not found. Try downloading again.');
-    return;
-  }
-  // Android — use existing openModule logic
-  openModule(ch, subject); // whatever the current call is
-};
+      return;
+    }
+    // Android — open in PdfViewer
+    setView({ ch, subject, storagePath: ch.storage_path });
+  };
 
   const beginDownload = (g: SubjectGroup, ch: Chapter) => {
     if (isModuleUnlocked(ch.id)) {
@@ -345,42 +357,43 @@ const Downloads = () => {
                             </p>
                           </div>
                           {isDownloaded ? (
-  <div className="flex items-center gap-1">
-    <button
-      onClick={() => handleReadChapter(ch, g.subject)}
-      className="inline-flex items-center gap-1 bg-success/15 border border-success/40 text-success text-[11px] font-bold rounded-md px-2.5 py-1.5"
-    >
-      <BookOpen className="h-3 w-3" /> Read 📖
-    </button>
-    <button
-              onClick={async () => {
-          if (!confirm(`Delete "${ch.title}"?`)) return;
-          try {
-            localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
-            try {
-              const { Filesystem, Directory } = await import('@capacitor/filesystem');
-              const fileName = `${g.subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`.replace(/[^a-z0-9._-]/gi, "_");
-              await Filesystem.deleteFile({
-                path: `highvault/chapters/${fileName}`,
-                directory: Directory.Cache,
-              });
-            } catch {}
-            if (user?.id) {
-              await supabase.from('downloads').delete()
-                .eq('user_id', user.id)
-                .eq('chapter_id', ch.id);
-            }
-            toast.success("Deleted from library");
-            await load();
-          } catch (e) {
-            toast.error("Could not delete. Try again.");
-          }
-        }}
-              className="inline-flex items-center justify-center w-7 h-7 bg-destructive/10 border border-destructive/30 text-destructive rounded-md"
-            >
-              🗑️
-            </button>
-          </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleReadChapter(ch, g.subject)}
+                                className="inline-flex items-center gap-1 bg-success/15 border border-success/40 text-success text-[11px] font-bold rounded-md px-2.5 py-1.5"
+                              >
+                                <BookOpen className="h-3 w-3" />
+                                {ios ? 'Open' : 'Read 📖'}
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm(`Delete "${ch.title}"?`)) return;
+                                  try {
+                                    localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
+                                    try {
+                                      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+                                      const fileName = `${g.subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`.replace(/[^a-z0-9._-]/gi, "_");
+                                      await Filesystem.deleteFile({
+                                        path: `highvault/chapters/${fileName}`,
+                                        directory: Directory.Cache,
+                                      });
+                                    } catch {}
+                                    if (user?.id) {
+                                      await supabase.from('downloads').delete()
+                                        .eq('user_id', user.id)
+                                        .eq('chapter_id', ch.id);
+                                    }
+                                    toast.success("Deleted from library");
+                                    await load();
+                                  } catch {
+                                    toast.error("Could not delete. Try again.");
+                                  }
+                                }}
+                                className="inline-flex items-center justify-center w-7 h-7 bg-destructive/10 border border-destructive/30 text-destructive rounded-md"
+                              >
+                                🗑️
+                              </button>
+                            </div>
                           ) : (
                             <button
                               onClick={() => beginDownload(g, ch)}
