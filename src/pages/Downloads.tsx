@@ -71,6 +71,11 @@ const Downloads = () => {
   const [confetti, setConfetti] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const ios = typeof navigator !== 'undefined' && (
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+);
+  
   const CACHE_KEY_DOWNLOADS = 'hv_cache_downloads';
   const CACHE_KEY_BOOKMARKS = 'hv_cache_bookmarks';
 
@@ -227,10 +232,36 @@ const Downloads = () => {
     }
   };
 
-    const handleReadChapter = async (ch: Chapter, subject: Subject) => {
+  {/*const handleReadChapter = async (ch: Chapter, subject: Subject) => {
     // Simple version: No iOS detection checks. Let PdfViewer handle everything.
     setView({ ch, subject, storagePath: ch.storage_path });
-  };
+  };*/}
+
+  const handleRead = async (ch: any, subject: any) => {
+  if (ios) {
+    try {
+      const cachedFile = localStorage.getItem(`hv_dl_${ch.id}`);
+      if (cachedFile) {
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        const result = await Filesystem.readFile({
+          path: `highvault/chapters/${cachedFile}`,
+          directory: Directory.Cache,
+        });
+        const base64 = result.data as string;
+        const byteChars = atob(base64);
+        const byteArr = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([byteArr], { type: 'application/pdf' });
+        window.open(URL.createObjectURL(blob), '_blank');
+        return;
+      }
+    } catch {}
+    toast.error('File not found. Try downloading again.');
+    return;
+  }
+  // Android — use existing openModule logic
+  openModule(ch, subject); // whatever the current call is
+};
 
   const beginDownload = (g: SubjectGroup, ch: Chapter) => {
     if (isModuleUnlocked(ch.id)) {
