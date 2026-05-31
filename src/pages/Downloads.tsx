@@ -70,6 +70,7 @@ const Downloads = () => {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [iosPdfUrl, setIosPdfUrl] = useState<string | null>(null);
 
   const ios = typeof navigator !== 'undefined' && (
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -233,47 +234,48 @@ const Downloads = () => {
 
   // Opens a downloaded PDF — iOS uses Safari, Android uses PdfViewer
   const handleReadChapter = async (ch: Chapter, subject: Subject) => {
-    if (ios) {
-      try {
-        const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
-        if (cachedFile && !cachedFile.startsWith('data:')) {
-          try {
-            const { Filesystem, Directory } = await import('@capacitor/filesystem');
-            await Filesystem.stat({
-              path: `highvault/chapters/${cachedFile}`,
-              directory: Directory.Cache,
-            });
-            const result = await Filesystem.readFile({
-              path: `highvault/chapters/${cachedFile}`,
-              directory: Directory.Cache,
-            });
-            const base64 = result.data as string;
-            const byteChars = atob(base64);
-            const byteArr = new Uint8Array(byteChars.length);
-            for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-            const blob = new Blob([byteArr], { type: 'application/pdf' });
-            window.open(URL.createObjectURL(blob), '_blank');
-            return;
-          } catch {
-            localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
-          }
+  if (ios) {
+    try {
+      // Try local cache first
+      const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
+      if (cachedFile && !cachedFile.startsWith('data:')) {
+        try {
+          const { Filesystem, Directory } = await import('@capacitor/filesystem');
+          await Filesystem.stat({
+            path: `highvault/chapters/${cachedFile}`,
+            directory: Directory.Cache,
+          });
+          const result = await Filesystem.readFile({
+            path: `highvault/chapters/${cachedFile}`,
+            directory: Directory.Cache,
+          });
+          const base64 = result.data as string;
+          const byteChars = atob(base64);
+          const byteArr = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+          const blob = new Blob([byteArr], { type: 'application/pdf' });
+          setIosPdfUrl(URL.createObjectURL(blob));
+          return;
+        } catch {
+          localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
         }
-        // Fallback to signed URL
-        const { data } = await supabase.storage
-          .from('chapters').createSignedUrl(ch.storage_path, 3600);
-        if (data?.signedUrl) {
-          window.open(data.signedUrl, '_blank');
-        } else {
-          toast.error('File not found. Try downloading again.');
-        }
-      } catch {
-        toast.error('Could not open PDF.');
       }
-      return;
+      // Fallback to signed URL
+      const { data } = await supabase.storage
+        .from('chapters').createSignedUrl(ch.storage_path, 3600);
+      if (data?.signedUrl) {
+        setIosPdfUrl(data.signedUrl);
+      } else {
+        toast.error('File not found. Try downloading again.');
+      }
+    } catch {
+      toast.error('Could not open PDF.');
     }
-    // Android — open in PdfViewer
-    setView({ ch, subject, storagePath: ch.storage_path });
-  };
+    return;
+  }
+  // Android
+  setView({ ch, subject, storagePath: ch.storage_path });
+};
 
   const beginDownload = (g: SubjectGroup, ch: Chapter) => {
     if (isModuleUnlocked(ch.id)) {
@@ -437,6 +439,35 @@ const Downloads = () => {
                     </div>
                   </Link>
                 ))}
+                {/* iOS PDF opener — uses anchor tag to avoid popup blocking */}
+              {iosPdfUrl && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/80 backdrop-blur-md">
+                  <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm text-center space-y-4 shadow-xl">
+                    <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+                      <BookOpen className="h-8 w-8 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">PDF Ready</p>
+                      <p className="text-xs text-muted-foreground mt-1">Tap below to open in Safari reader</p>
+                    </div>
+                    
+                      href={iosPdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIosPdfUrl(null)}
+                      className="flex items-center justify-center gap-2 w-full px-6 py-3 bg-primary text-white rounded-xl font-semibold text-sm"
+                    >
+                      📖 Open PDF
+                    </a>
+                    <button
+                      onClick={() => setIosPdfUrl(null)}
+                      className="text-xs text-muted-foreground"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
               </div>
             </section>
           )}
