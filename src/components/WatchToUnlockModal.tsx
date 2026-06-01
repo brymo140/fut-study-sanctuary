@@ -1,11 +1,9 @@
-// Rewarded-ad gate for module unlocks. Triggers the AdMob rewarded video
-// (or no-ops on web) and only calls onUnlocked() if the reward is granted.
 import { useEffect, useRef, useState } from "react";
 import { Gift, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Confetti } from "./ads/Confetti";
 import { AdSession } from "@/lib/adSession";
-import { showRewardedAd, isOnline } from "@/lib/admob";
+import { showRewardedAd, isOnline, isNativePlatform } from "@/lib/admob";
 import { toast } from "sonner";
 
 interface Props {
@@ -16,7 +14,7 @@ interface Props {
 }
 
 export const WatchToUnlockModal = ({ open, chapterTitle, onClose, onUnlocked }: Props) => {
-  const [phase, setPhase] = useState<"loading" | "unlocked">("loading");
+  const [phase, setPhase] = useState<"loading" | "unlocked" | "no-ad">("loading");
   const started = useRef(false);
 
   useEffect(() => {
@@ -35,12 +33,17 @@ export const WatchToUnlockModal = ({ open, chapterTitle, onClose, onUnlocked }: 
       const granted = await showRewardedAd();
       if (granted) {
         setPhase("unlocked");
-        // Save/open immediately after ad reward so the module button persists
-        // correctly after leaving and returning.
         await Promise.resolve(onUnlocked());
       } else {
-        toast.error("Watch the full ad to unlock");
-        onClose();
+        // Ad not available — show skip option instead of blocking user
+        if (!isNativePlatform()) {
+          // Web/PWA — always allow (no ads on web)
+          setPhase("unlocked");
+          await Promise.resolve(onUnlocked());
+        } else {
+          // Native Android but ad failed — show skip option
+          setPhase("no-ad");
+        }
       }
     })();
   }, [open, onClose]);
@@ -51,7 +54,8 @@ export const WatchToUnlockModal = ({ open, chapterTitle, onClose, onUnlocked }: 
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-background/80 backdrop-blur-md" />
       <div className="relative w-full max-w-sm surface-elevated p-6 rounded-2xl animate-fade-in overflow-hidden">
-        {phase === "loading" ? (
+
+        {phase === "loading" && (
           <div className="flex flex-col items-center py-6">
             <div className="h-12 w-12 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4" />
             <p className="text-sm font-semibold">Loading rewarded ad…</p>
@@ -60,7 +64,33 @@ export const WatchToUnlockModal = ({ open, chapterTitle, onClose, onUnlocked }: 
               <span className="text-foreground/80">{chapterTitle}</span>
             </p>
           </div>
-        ) : (
+        )}
+
+        {phase === "no-ad" && (
+          <div className="flex flex-col items-center py-4 text-center gap-4">
+            <div className="text-4xl">📭</div>
+            <div>
+              <p className="text-sm font-semibold">No ad available right now</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Ads are still being set up. You can download this module for free for now.
+              </p>
+            </div>
+            <Button
+              onClick={async () => {
+                setPhase("unlocked");
+                await Promise.resolve(onUnlocked());
+              }}
+              className="w-full h-11 rounded-xl font-semibold"
+            >
+              📥 Download for Free
+            </Button>
+            <button onClick={onClose} className="text-xs text-muted-foreground">
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {phase === "unlocked" && (
           <>
             <Confetti />
             <div
@@ -86,6 +116,7 @@ export const WatchToUnlockModal = ({ open, chapterTitle, onClose, onUnlocked }: 
             </Button>
           </>
         )}
+
       </div>
     </div>
   );
