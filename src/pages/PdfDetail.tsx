@@ -393,7 +393,7 @@ const PdfDetail = () => {
           </h2>
           <p className="text-[11px] text-muted-foreground mb-3">
             {ios
-              ? "📖 Download once, then open from your library in Safari."
+              ? "📖 Download once, then read from your library."
               : "📖 Download once, then read from your library."}
           </p>
           {chapters.length === 0 ? (
@@ -528,7 +528,7 @@ const PdfDetail = () => {
               <BookOpen className="h-8 w-8 text-primary" />
             </div>
             <div>
-              <p className="font-semibold text-sm">PDF Ready</p>
+              <p className="font-semibold text-sm">Material Ready</p>
               <p className="text-xs text-muted-foreground mt-1">Tap below to open in Safari reader</p>
             </div>
             <a
@@ -538,7 +538,7 @@ const PdfDetail = () => {
               onClick={() => setIosPdfUrl(null)}
               className="flex items-center justify-center gap-2 w-full px-6 py-3 bg-primary text-white rounded-xl font-semibold text-sm"
             >
-              📖 Open PDF
+              📖 Open
             </a>
             <button
               onClick={() => setIosPdfUrl(null)}
