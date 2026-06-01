@@ -9,8 +9,6 @@ import { NotificationsSheet } from "@/components/NotificationsSheet";
 import { useRewardedYouTubeOpener } from "@/hooks/useRewardedYouTube";
 import { maybeShowStudyReminder } from "@/lib/pushNotifications";
 import { cacheData, getCachedData } from "@/lib/cache";
-import { InlineAdSlot } from "@/components/ads/InlineAdSlot";
-import { AD_UNITS } from "@/lib/admob";
 
 
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
@@ -186,8 +184,6 @@ const Home = () => {
         ))}
       </div>
 
-      <InlineAdSlot adUnitId={AD_UNITS.homeBanner1} size="banner" />
-      
       <Section title="Trending this week" subtitle="Most downloaded by your peers">
         {trending.length === 0 ? (
           <EmptyHint text="No trending materials yet. Check back soon." />
@@ -204,8 +200,6 @@ const Home = () => {
           </div>
         )}
       </Section>
-
-      <InlineAdSlot adUnitId={AD_UNITS.homeBanner2} size="banner" />
 
       <Section
         title="Learning channels"
