@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
+import { AdSession } from "@/lib/adSession";
+import { showInterstitial, isNativePlatform } from "@/lib/admob";
 
 interface Props {
   open: boolean;
@@ -120,6 +122,17 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     return () => document.removeEventListener('contextmenu', block);
   }, [open]);
 
+  useEffect(() => {
+  if (!open) return;
+  const timer = setTimeout(async () => {
+    if (AdSession.isInterstitialDue() && isNativePlatform() && navigator.onLine) {
+      AdSession.markInterstitialShown();
+      await showInterstitial();
+    }
+  }, 3 * 60 * 1000);
+  return () => clearTimeout(timer);
+}, [open]);
+  
   const loadPdf = async () => {
     setLoading(true);
     setError(null);
