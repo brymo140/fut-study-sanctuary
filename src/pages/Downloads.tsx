@@ -10,7 +10,6 @@ import { savePdfToDevice } from "@/lib/deviceFiles";
 import { Confetti } from "@/components/ads/Confetti";
 import { toast } from "sonner";
 
-
 interface Chapter {
   id: string;
   title: string;
@@ -232,50 +231,49 @@ const Downloads = () => {
     }
   };
 
-  // Opens a downloaded PDF — iOS uses Safari, Android uses PdfViewer
+  // Opens a downloaded PDF — iOS shows popup with anchor link, Android uses PdfViewer
   const handleReadChapter = async (ch: Chapter, subject: Subject) => {
-  if (ios) {
-    try {
-      // Try local cache first
-      const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
-      if (cachedFile && !cachedFile.startsWith('data:')) {
-        try {
-          const { Filesystem, Directory } = await import('@capacitor/filesystem');
-          await Filesystem.stat({
-            path: `highvault/chapters/${cachedFile}`,
-            directory: Directory.Cache,
-          });
-          const result = await Filesystem.readFile({
-            path: `highvault/chapters/${cachedFile}`,
-            directory: Directory.Cache,
-          });
-          const base64 = result.data as string;
-          const byteChars = atob(base64);
-          const byteArr = new Uint8Array(byteChars.length);
-          for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-          const blob = new Blob([byteArr], { type: 'application/pdf' });
-          setIosPdfUrl(URL.createObjectURL(blob));
-          return;
-        } catch {
-          localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
+    if (ios) {
+      try {
+        const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
+        if (cachedFile && !cachedFile.startsWith('data:')) {
+          try {
+            const { Filesystem, Directory } = await import('@capacitor/filesystem');
+            await Filesystem.stat({
+              path: `highvault/chapters/${cachedFile}`,
+              directory: Directory.Cache,
+            });
+            const result = await Filesystem.readFile({
+              path: `highvault/chapters/${cachedFile}`,
+              directory: Directory.Cache,
+            });
+            const base64 = result.data as string;
+            const byteChars = atob(base64);
+            const byteArr = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+            const blob = new Blob([byteArr], { type: 'application/pdf' });
+            setIosPdfUrl(URL.createObjectURL(blob));
+            return;
+          } catch {
+            localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
+          }
         }
+        // Fallback to signed URL
+        const { data } = await supabase.storage
+          .from('chapters').createSignedUrl(ch.storage_path, 3600);
+        if (data?.signedUrl) {
+          setIosPdfUrl(data.signedUrl);
+        } else {
+          toast.error('File not found. Try downloading again.');
+        }
+      } catch {
+        toast.error('Could not open PDF.');
       }
-      // Fallback to signed URL
-      const { data } = await supabase.storage
-        .from('chapters').createSignedUrl(ch.storage_path, 3600);
-      if (data?.signedUrl) {
-        setIosPdfUrl(data.signedUrl);
-      } else {
-        toast.error('File not found. Try downloading again.');
-      }
-    } catch {
-      toast.error('Could not open PDF.');
+      return;
     }
-    return;
-  }
-  // Android
-  setView({ ch, subject, storagePath: ch.storage_path });
-};
+    // Android — open in PdfViewer
+    setView({ ch, subject, storagePath: ch.storage_path });
+  };
 
   const beginDownload = (g: SubjectGroup, ch: Chapter) => {
     if (isModuleUnlocked(ch.id)) {
@@ -288,6 +286,7 @@ const Downloads = () => {
   return (
     <div className="space-y-5 relative">
       {confetti && <Confetti durationMs={1500} />}
+
       <div>
         <h1 className="text-2xl font-bold">Library 📚</h1>
         <p className="text-sm text-muted-foreground">
@@ -415,7 +414,7 @@ const Downloads = () => {
             );
           })}
 
-                    {bookmarks.length > 0 && (
+          {bookmarks.length > 0 && (
             <section className="space-y-2.5">
               <div className="flex items-center gap-2">
                 <Bookmark className="h-4 w-4 text-primary" />
@@ -442,47 +441,53 @@ const Downloads = () => {
               </div>
             </section>
           )}
+        </>
+      )}
 
-          {/* iOS PDF opener — uses anchor tag to avoid popup blocking */}
-          {iosPdfUrl && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/80 backdrop-blur-md">
-              <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm text-center space-y-4 shadow-xl">
-                <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-                  <BookOpen className="h-8 w-8 text-primary" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Material Ready</p>
-                  <p className="text-xs text-muted-foreground mt-1">Tap below to open in Safari reader</p>
-                </div>
-                <a
-                  href={iosPdfUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setIosPdfUrl(null)}
-                  className="flex items-center justify-center gap-2 w-full px-6 py-3 bg-primary text-white rounded-xl font-semibold text-sm"
-                >
-                  📖 Open
-                </a>
-                <button onClick={() => setIosPdfUrl(null)} className="text-xs text-muted-foreground">
-                  Cancel
-                </button>
-              </div>
+      {/* iOS PDF opener — OUTSIDE the ternary so it always renders */}
+      {iosPdfUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/80 backdrop-blur-md">
+          <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm text-center space-y-4 shadow-xl">
+            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+              <BookOpen className="h-8 w-8 text-primary" />
             </div>
-          )}
+            <div>
+              <p className="font-semibold text-sm">Material Ready</p>
+              <p className="text-xs text-muted-foreground mt-1">Tap below to open in Safari reader</p>
+            </div>
+            <a
+              href={iosPdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setIosPdfUrl(null)}
+              className="flex items-center justify-center gap-2 w-full px-6 py-3 bg-primary text-white rounded-xl font-semibold text-sm"
+            >
+              📖 Open PDF
+            </a>
+            <button
+              onClick={() => setIosPdfUrl(null)}
+              className="text-xs text-muted-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
-          <WatchToUnlockModal
-            open={!!unlock}
-            chapterTitle={unlock?.ch.title || ""}
-            onClose={() => setUnlock(null)}
-            onUnlocked={completeDownload}
-          />
-          <PdfViewer
-            open={!!view}
-            onOpenChange={(v) => !v && setView(null)}
-            storagePath={view?.storagePath ?? null}
-            chapterId={view?.ch.id}
-            title={view ? `M${view.ch.chapter_number} · ${view.ch.title}` : undefined}
-          />
+      {/* Modals — OUTSIDE the ternary */}
+      <WatchToUnlockModal
+        open={!!unlock}
+        chapterTitle={unlock?.ch.title || ""}
+        onClose={() => setUnlock(null)}
+        onUnlocked={completeDownload}
+      />
+      <PdfViewer
+        open={!!view}
+        onOpenChange={(v) => !v && setView(null)}
+        storagePath={view?.storagePath ?? null}
+        chapterId={view?.ch.id}
+        title={view ? `M${view.ch.chapter_number} · ${view.ch.title}` : undefined}
+      />
     </div>
   );
 };
