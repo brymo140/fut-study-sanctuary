@@ -14,12 +14,19 @@ export const useRewardedYouTubeOpener = () => {
       return;
     }
 
-    // Show rewarded interstitial — never block YouTube if ad fails
+    // CRITICAL: Open URL FIRST before any await
+    // iOS PWA blocks window.open if called after async operations
+    if (Capacitor.isNativePlatform()) {
+      window.open(url, '_system');
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    // After opening, show ad and grant XP in background
     if (Capacitor.isNativePlatform()) {
       showRewardedInterstitial().catch(() => {});
     }
 
-    // Grant XP
     if (user) {
       try {
         const { data: prof } = await supabase
@@ -29,13 +36,6 @@ export const useRewardedYouTubeOpener = () => {
         refreshProfile();
         toast.success("+5 XP for watching!");
       } catch {}
-    }
-
-    // Open in YouTube app on Android, browser on web
-    if (Capacitor.isNativePlatform()) {
-      window.open(url, '_system');
-    } else {
-      window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 };
