@@ -441,38 +441,30 @@ const Downloads = () => {
                 ))}
                 {/* iOS PDF opener — uses anchor tag to avoid popup blocking */}
               {iosPdfUrl && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/80 backdrop-blur-md">
-                  <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm text-center space-y-4 shadow-xl">
-                    <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-                      <BookOpen className="h-8 w-8 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">PDF Ready</p>
-                      <p className="text-xs text-muted-foreground mt-1">Tap below to open in Safari reader</p>
-                    </div>
-                      <a
-                      href={iosPdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setIosPdfUrl(null)}
-                      className="flex items-center justify-center gap-2 w-full px-6 py-3 bg-primary text-white rounded-xl font-semibold text-sm"
-                    >
-                      📖 Open PDF
-                    </a>
-                    <button
-                      onClick={() => setIosPdfUrl(null)}
-                      className="text-xs text-muted-foreground"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-              </div>
-            </section>
-          )}
-        </>
-      )}
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/80 backdrop-blur-md">
+    <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm text-center space-y-4 shadow-xl">
+      <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+        <BookOpen className="h-8 w-8 text-primary" />
+      </div>
+      <div>
+        <p className="font-semibold text-sm">Material Ready</p>
+        <p className="text-xs text-muted-foreground mt-1">Tap below to open in Safari reader</p>
+      </div>
+      <a
+        href={iosPdfUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => setIosPdfUrl(null)}
+        className="flex items-center justify-center gap-2 w-full px-6 py-3 bg-primary text-white rounded-xl font-semibold text-sm"
+      >
+        📖 Open
+      </a>
+      <button onClick={() => setIosPdfUrl(null)} className="text-xs text-muted-foreground">
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
 
       <WatchToUnlockModal
         open={!!unlock}
