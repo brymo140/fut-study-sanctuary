@@ -70,3 +70,27 @@ export const maybeShowStudyReminder = () => {
     localStorage.setItem(key, String(now));
   }
 };
+
+export const scheduleStreakReminder = async (userId: string, lastActive: string) => {
+  const last = new Date(lastActive);
+  const now = new Date();
+  const days = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (days >= 2 && days < 3) {
+    // Call edge function to send reminder
+    try {
+      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          title: '🐝 Your streak is at risk!',
+          body: 'You haven\'t visited HighVault in 2 days. Come back to keep your streak alive!',
+          user_ids: [userId],
+        }),
+      });
+    } catch {}
+  }
+};
