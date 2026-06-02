@@ -126,7 +126,7 @@ export const AdminAnnouncements = () => {
       await sendPushNotification({
         target_level: form.target_level || "all",
         target_department: null,
-        title: "HighVault 📚",
+        title: "HighVault",
         body: form.title.slice(0, 80),
         url: "/",
       });
@@ -298,7 +298,7 @@ export const AdminAnnouncements = () => {
           disabled={uploading}
           className="w-full bg-gradient-button border border-primary/40 text-primary text-sm font-semibold rounded-lg py-2.5 disabled:opacity-50"
         >
-          📢 Post announcement + Send push notification
+          Post announcement
         </button>
       </div>
 
