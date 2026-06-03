@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth, isHardcodedAdminEmail } from "@/contexts/AuthContext";
-import { BarChart3, FileText, Youtube, Users, Megaphone, Flag, Settings as SettingsIcon } from "lucide-react";
+import {
+  BarChart3, FileText, Youtube, Users,
+  Megaphone, Flag, Settings as SettingsIcon, MessageSquare
+} from "lucide-react";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { AdminPdfs } from "@/components/admin/AdminPdfs";
 import { AdminYouTube } from "@/components/admin/AdminYouTube";
@@ -9,22 +12,43 @@ import { AdminUsers } from "@/components/admin/AdminUsers";
 import { AdminAnnouncements } from "@/components/admin/AdminAnnouncements";
 import { AdminReports } from "@/components/admin/AdminReports";
 import { AdminSettings } from "@/components/admin/AdminSettings";
+import { AdminFeedback } from "@/components/admin/AdminFeedback";
 
-type TabKey = "dashboard" | "pdfs" | "youtube" | "users" | "announcements" | "reports" | "settings";
+type TabKey =
+  | "dashboard"
+  | "pdfs"
+  | "youtube"
+  | "users"
+  | "announcements"
+  | "feedback"
+  | "reports"
+  | "settings";
 
-const TABS: { key: TabKey; label: string; icon: any }[] = [
-  { key: "dashboard", label: "Dashboard", icon: BarChart3 },
-  { key: "pdfs", label: "PDFs", icon: FileText },
-  { key: "youtube", label: "YouTube", icon: Youtube },
-  { key: "users", label: "Users", icon: Users },
-  { key: "announcements", label: "Notices", icon: Megaphone },
-  { key: "reports", label: "Reports", icon: Flag },
-  { key: "settings", label: "Settings", icon: SettingsIcon },
+// All tabs — admins see all, reps only see pdfs and youtube
+const ALL_TABS: { key: TabKey; label: string; icon: any; repAllowed: boolean }[] = [
+  { key: "dashboard",     label: "Dashboard", icon: BarChart3,     repAllowed: false },
+  { key: "pdfs",          label: "PDFs",      icon: FileText,      repAllowed: true  },
+  { key: "youtube",       label: "YouTube",   icon: Youtube,       repAllowed: true  },
+  { key: "users",         label: "Users",     icon: Users,         repAllowed: false },
+  { key: "announcements", label: "Notices",   icon: Megaphone,     repAllowed: false },
+  { key: "feedback",      label: "Feedback",  icon: MessageSquare, repAllowed: false },
+  { key: "reports",       label: "Reports",   icon: Flag,          repAllowed: false },
+  { key: "settings",      label: "Settings",  icon: SettingsIcon,  repAllowed: false },
 ];
 
 const Admin = () => {
-  const { isAdmin, loading, session } = useAuth();
-  const [tab, setTab] = useState<TabKey>("dashboard");
+  const { isAdmin, isRep, loading, session } = useAuth();
+
+  // Determine visible tabs based on role
+  const visibleTabs = ALL_TABS.filter((t) => {
+    if (isAdmin || isHardcodedAdminEmail(session?.user?.email)) return true;
+    if (isRep) return t.repAllowed;
+    return false;
+  });
+
+  const [tab, setTab] = useState<TabKey>(
+    visibleTabs.length > 0 ? visibleTabs[0].key : "pdfs"
+  );
 
   if (loading) {
     return (
@@ -33,26 +57,37 @@ const Admin = () => {
       </div>
     );
   }
-  // Only redirect if not signed in. Hardcoded admin emails always pass.
+
   if (!session) return <Navigate to="/" replace />;
+
   const emailIsAdmin = isHardcodedAdminEmail(session.user.email);
-  if (!isAdmin && !emailIsAdmin) return <Navigate to="/" replace />;
+  if (!isAdmin && !emailIsAdmin && !isRep) return <Navigate to="/" replace />;
+
+  const isFullAdmin = isAdmin || emailIsAdmin;
 
   return (
     <div className="space-y-4 pb-6">
       {/* Header */}
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold gradient-text-brand">Admin panel</h1>
-          <p className="text-[11px] text-muted-foreground">HighVault control center</p>
+          <h1 className="text-xl font-bold gradient-text-brand">
+            {isFullAdmin ? "Admin Panel" : "Rep Panel"}
+          </h1>
+          <p className="text-[11px] text-muted-foreground">
+            {isFullAdmin
+              ? "HighVault control center"
+              : "Upload materials for your level"}
+          </p>
         </div>
-        <div className="badge-purple">ADMIN</div>
+        <div className={isFullAdmin ? "badge-purple" : "badge-blue"}>
+          {isFullAdmin ? "ADMIN" : "REP"}
+        </div>
       </header>
 
-      {/* Tab bar — horizontal scroll on mobile */}
+      {/* Tab bar */}
       <div className="sticky top-0 z-20 -mx-4 px-4 py-2 bg-background/90 backdrop-blur border-b border-border">
         <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
-          {TABS.map((t) => {
+          {visibleTabs.map((t) => {
             const Icon = t.icon;
             const active = tab === t.key;
             return (
@@ -74,13 +109,14 @@ const Admin = () => {
       </div>
 
       <div className="pt-2">
-        {tab === "dashboard" && <AdminDashboard />}
-        {tab === "pdfs" && <AdminPdfs />}
-        {tab === "youtube" && <AdminYouTube />}
-        {tab === "users" && <AdminUsers />}
+        {tab === "dashboard"     && <AdminDashboard />}
+        {tab === "pdfs"          && <AdminPdfs />}
+        {tab === "youtube"       && <AdminYouTube />}
+        {tab === "users"         && <AdminUsers />}
         {tab === "announcements" && <AdminAnnouncements />}
-        {tab === "reports" && <AdminReports />}
-        {tab === "settings" && <AdminSettings />}
+        {tab === "feedback"      && <AdminFeedback />}
+        {tab === "reports"       && <AdminReports />}
+        {tab === "settings"      && <AdminSettings />}
       </div>
     </div>
   );
