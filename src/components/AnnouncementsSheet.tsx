@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
-import { Megaphone, FileText, ExternalLink } from "lucide-react";
+import { Megaphone, FileText, ExternalLink, ArrowRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useNavigate } from "react-router-dom";
 
 interface Announcement {
   id: string;
@@ -13,6 +14,8 @@ interface Announcement {
   attachment_url?: string | null;
   attachment_type?: string | null;
   attachment_name?: string | null;
+  link_url?: string | null;
+  link_label?: string | null;
 }
 
 interface Props {
@@ -25,13 +28,14 @@ export const AnnouncementsSheet = ({ open, onOpenChange, userLevel }: Props) => 
   const [items, setItems] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     supabase
       .from("announcements")
-      .select("id,title,body,target_level,created_at,attachment_url,attachment_type,attachment_name")
+      .select("id,title,body,target_level,created_at,attachment_url,attachment_type,attachment_name,link_url,link_label")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(50)
@@ -45,9 +49,19 @@ export const AnnouncementsSheet = ({ open, onOpenChange, userLevel }: Props) => 
       });
   }, [open, userLevel]);
 
+  const handleLinkTap = (url: string) => {
+    // Internal app route
+    if (url.startsWith("/")) {
+      onOpenChange(false);
+      navigate(url);
+      return;
+    }
+    // External URL
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   const openPdf = (url: string) => {
-    // iOS opens in Safari, Android opens in new tab
-    window.open(url, '_blank', 'noopener,noreferrer');
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -70,9 +84,7 @@ export const AnnouncementsSheet = ({ open, onOpenChange, userLevel }: Props) => 
             ) : items.length === 0 ? (
               <div className="surface-card p-8 text-center">
                 <div className="text-4xl mb-3">📢</div>
-                <p className="text-sm text-muted-foreground">
-                  No announcements yet. Check back soon.
-                </p>
+                <p className="text-sm text-muted-foreground">No announcements yet.</p>
               </div>
             ) : (
               items.map((a) => (
@@ -85,42 +97,57 @@ export const AnnouncementsSheet = ({ open, onOpenChange, userLevel }: Props) => 
                     )}
                   </div>
 
-                  {/* Time */}
                   <p className="text-xs text-muted-foreground">
                     {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
                   </p>
 
-                  {/* Body */}
                   <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
                     {a.body}
                   </p>
 
-                  {/* Attachment */}
-                  {a.attachment_url && a.attachment_type === 'image' && (
+                  {/* Image attachment */}
+                  {a.attachment_url && a.attachment_type === "image" && (
                     <div className="mt-2">
                       <img
                         src={a.attachment_url}
-                        alt={a.attachment_name || 'Attachment'}
+                        alt={a.attachment_name || "Image"}
                         className="w-full rounded-lg object-cover max-h-48 cursor-pointer"
                         onClick={() => setLightboxImg(a.attachment_url!)}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                       <p className="text-[10px] text-muted-foreground mt-1 text-center">
-                        Tap image to view full size
+                        Tap to view full size
                       </p>
                     </div>
                   )}
 
-                  {a.attachment_url && a.attachment_type === 'pdf' && (
+                  {/* PDF attachment */}
+                  {a.attachment_url && a.attachment_type === "pdf" && (
                     <button
                       onClick={() => openPdf(a.attachment_url!)}
                       className="flex items-center gap-2 w-full px-3 py-2.5 bg-primary/10 border border-primary/30 rounded-lg text-primary text-xs font-semibold mt-2"
                     >
                       <FileText className="h-4 w-4 shrink-0" />
                       <span className="flex-1 text-left truncate">
-                        {a.attachment_name || 'View attached PDF'}
+                        {a.attachment_name || "View PDF"}
                       </span>
                       <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                    </button>
+                  )}
+
+                  {/* Link button */}
+                  {a.link_url && (
+                    <button
+                      onClick={() => handleLinkTap(a.link_url!)}
+                      className="flex items-center gap-2 w-full px-3 py-2.5 bg-gradient-button border border-primary/40 rounded-lg text-primary text-xs font-semibold mt-1"
+                    >
+                      <ArrowRight className="h-4 w-4 shrink-0" />
+                      <span className="flex-1 text-left">
+                        {a.link_label || "Visit Link"}
+                      </span>
+                      {!a.link_url.startsWith("/") && (
+                        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                      )}
                     </button>
                   )}
                 </div>
@@ -142,7 +169,7 @@ export const AnnouncementsSheet = ({ open, onOpenChange, userLevel }: Props) => 
             className="max-w-full max-h-full rounded-lg object-contain"
           />
           <button
-            className="absolute top-4 right-4 text-white text-2xl font-bold"
+            className="absolute top-4 right-4 text-white text-2xl font-bold h-10 w-10 rounded-full bg-black/50 flex items-center justify-center"
             onClick={() => setLightboxImg(null)}
           >
             ✕
