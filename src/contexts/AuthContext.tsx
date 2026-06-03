@@ -271,7 +271,7 @@ if (daysSinceActive === 2) {
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
