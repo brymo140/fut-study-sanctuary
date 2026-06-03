@@ -6,7 +6,6 @@ import { Trash2, Pencil, Plus, Paperclip, X, FileText, Image, Link } from "lucid
 import { SectionHeader, Field, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
 import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
 import { sendPushNotification } from "@/lib/pushNotifications";
-import { Capacitor } from "@capacitor/core";
 
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
