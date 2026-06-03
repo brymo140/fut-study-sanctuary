@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { withSchemaRetry } from "@/lib/supabaseRetry";
 import { registerNativeAuthDeepLinks } from "@/lib/nativeDeepLinks";
-import { initPushNotifications } from "@/lib/pushNotifications";
+import { initPushNotifications, sendPushNotification } from "@/lib/pushNotifications";
 
 interface Profile {
   id: string;
@@ -62,7 +62,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
     ]);
+
     const emailForCheck = (sessionEmail || profileData?.email || "").toLowerCase();
+
     if (profileData?.is_banned && !isHardcodedAdminEmail(emailForCheck)) {
       setProfile(profileData as Profile);
       storeRole("student");
@@ -75,11 +77,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     if (profileData?.is_banned && isHardcodedAdminEmail(emailForCheck)) {
-      await withSchemaRetry(async () => await supabase.from("profiles").update({ is_banned: false }).eq("id", uid));
+      await withSchemaRetry(async () =>
+        await supabase.from("profiles").update({ is_banned: false }).eq("id", uid)
+      );
       profileData.is_banned = false;
     }
 
-    // Normalize nullable numeric fields coming from DB.
     const normalizedProfile = profileData
       ? ({
           ...(profileData as any),
@@ -90,41 +93,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     setProfile(normalizedProfile);
 
+    // Streak warning and reset logic
     if (profileData?.last_active) {
       const lastActive = new Date(profileData.last_active);
       const now = new Date();
-      const daysSinceActive = Math.floor((now.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
+      const daysSinceActive = Math.floor(
+        (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24)
+      );
 
-      if (daysSinceActive === 2) {
-        setTimeout(() => {
-          toast.warning('⚠️ Your reading streak resets tomorrow! Open HighVault daily to keep it going 🐝');
-        }, 3000);
-      } else if (daysSinceActive >= 3) {
-        await withSchemaRetry(async () => await supabase
-          .from("profiles")
-          .update({ streak: 0 })
-          .eq("id", profileData.id));
-        if (normalizedProfile) {
-          normalizedProfile.streak = 0;
-        }
-      }
-    }
+if (daysSinceActive === 2) {
+  const isNative = (await import('@capacitor/core')).Capacitor.isNativePlatform();
 
-    initPushNotifications(uid);
+  if (isNative) {
+    // Android — send push notification only (no toast, they see it in notification bar)
+    sendPushNotification({
+      title: '🐝 Streak at risk!',
+      body: "You haven't visited HighVault in 2 days. Your streak resets tomorrow!",
+      user_ids: [uid],
+      url: '/',
+    }).catch(() => {});
+  } else {
+    // iPhone PWA — in-app toast only (no push support)
+    setTimeout(() => {
+      toast.warning('⚠️ Your reading streak resets tomorrow! Come back daily 🐝');
+    }, 3000);
+  }
 
+} else if (daysSinceActive >= 3) {
+  await withSchemaRetry(async () =>
+    await supabase.from("profiles").update({ streak: 0 }).eq("id", profileData.id)
+  );
+  if (normalizedProfile) normalizedProfile.streak = 0;
+
+  const isNative = (await import('@capacitor/core')).Capacitor.isNativePlatform();
+
+  if (isNative) {
+    // Android — push notification for streak reset
+    sendPushNotification({
+      title: '🔄 Streak Reset',
+      body: 'Your HighVault reading streak has been reset. Open the app to start a new streak!',
+      user_ids: [uid],
+      url: '/',
+    }).catch(() => {});
+  } else {
+    // iPhone — in-app toast
+    setTimeout(() => {
+      toast('🔄 Your reading streak was reset. Start fresh today!');
+    }, 2000);
+  }
+}
+
+    // Init push notifications with a delay so app loads first
+    setTimeout(() => {
+      initPushNotifications(uid);
+    }, 2500);
+
+    // Role resolution
     let admin = !!roles?.some((r) => r.role === "admin");
     const rep = !!roles?.some((r) => r.role === "rep");
 
-    // Safety net: every login, if this is the hardcoded admin email
-    // (works for both email/password AND Google OAuth — uses session email
-    // so it triggers even before/without a profile row), make sure the
-    // admin role is present. Idempotent on every login.
     if (isHardcodedAdminEmail(emailForCheck)) {
-      // Insert if missing — duplicate is fine, unique constraint will no-op.
       if (!admin) {
-        const { error: insertErr } = await withSchemaRetry(async () => await supabase
-          .from("user_roles")
-          .insert({ user_id: uid, role: "admin" }));
+        const { error: insertErr } = await withSchemaRetry(async () =>
+          await supabase.from("user_roles").insert({ user_id: uid, role: "admin" })
+        );
         if (!insertErr || insertErr.code === "23505") admin = true;
       }
       admin = true;
@@ -142,25 +174,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (last !== today) {
         const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
         const newStreak = last === yesterday ? (normalizedProfile.streak || 0) + 1 : 1;
-        await withSchemaRetry(async () => await supabase
-          .from("profiles")
-          .update({ last_active: today, streak: newStreak })
-          .eq("id", uid));
+        await withSchemaRetry(async () =>
+          await supabase
+            .from("profiles")
+            .update({ last_active: today, streak: newStreak })
+            .eq("id", uid)
+        );
         setProfile({ ...normalizedProfile, last_active: today, streak: newStreak } as Profile);
       }
     }
   };
 
   useEffect(() => {
-    // Honor "Remember me": if user opted out, clear stored session on a fresh
-    // browser session (new tab/window where sessionStorage tab marker is missing).
     sessionStorage.setItem("hv_tab_open", "1");
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
-        // Immediate admin flag for hardcoded emails — no DB wait.
         if (isHardcodedAdminEmail(newSession.user.email)) {
           setIsAdmin(true);
           setIsRep(false);
@@ -179,18 +210,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     });
 
-          // If offline, check localStorage for existing session immediately
-      if (!navigator.onLine) {
-        const hasSession = Object.keys(localStorage).some(k => 
-          k.includes('sb-') && k.includes('-auth-token')
-        );
-        if (hasSession) {
-          setLoading(false);
-          // Still try to get session in background
-        }
-      }
-      
-      supabase.auth.getSession().then(({ data: { session: s } }) => {
+    // If offline, check localStorage for existing session immediately
+    if (!navigator.onLine) {
+      const hasSession = Object.keys(localStorage).some(
+        (k) => k.includes('sb-') && k.includes('-auth-token')
+      );
+      if (hasSession) setLoading(false);
+    }
+
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
@@ -210,10 +238,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     });
 
-    // Native deep-link handler for OAuth callbacks (no-op on web).
-    const cleanupDeepLinks = registerNativeAuthDeepLinks(() => {
-      // Session is set by the listener; auth state change above will pick it up.
-    });
+    const cleanupDeepLinks = registerNativeAuthDeepLinks(() => {});
 
     return () => {
       sub.subscription.unsubscribe();
@@ -230,11 +255,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
   };
 
-  const roleLabel: "Admin" | "Class Rep" | "Student" = isAdmin ? "Admin" : isRep ? "Class Rep" : "Student";
+  const roleLabel: "Admin" | "Class Rep" | "Student" = isAdmin
+    ? "Admin"
+    : isRep
+    ? "Class Rep"
+    : "Student";
 
   return (
     <AuthContext.Provider
-      value={{ session, user, profile, isAdmin, isRep, roleLabel, loading, roleLoading, refreshProfile, signOut }}
+      value={{
+        session, user, profile, isAdmin, isRep,
+        roleLabel, loading, roleLoading, refreshProfile, signOut,
+      }}
     >
       {children}
     </AuthContext.Provider>
