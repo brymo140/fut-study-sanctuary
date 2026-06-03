@@ -260,7 +260,7 @@ if (daysSinceActive === 2) {
     : isRep
     ? "Class Rep"
     : "Student";
-
+  }
   return (
     <AuthContext.Provider
       value={{
