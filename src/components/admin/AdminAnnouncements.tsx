@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Trash2, Pencil, Plus, Paperclip, X, FileText, Image } from "lucide-react";
+import { Trash2, Pencil, Plus, Paperclip, X, FileText, Image, Link } from "lucide-react";
 import { SectionHeader, Field, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
 import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
 import { sendPushNotification } from "@/lib/pushNotifications";
+import { Capacitor } from "@capacitor/core";
 
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
@@ -19,6 +20,8 @@ interface Ann {
   attachment_url?: string | null;
   attachment_type?: string | null;
   attachment_name?: string | null;
+  link_url?: string | null;
+  link_label?: string | null;
 }
 
 const emptyForm = {
@@ -28,6 +31,8 @@ const emptyForm = {
   attachment_url: null as string | null,
   attachment_type: null as string | null,
   attachment_name: null as string | null,
+  link_url: "",
+  link_label: "",
 };
 
 export const AdminAnnouncements = () => {
@@ -37,6 +42,7 @@ export const AdminAnnouncements = () => {
   const [form, setForm] = useState({ ...emptyForm });
   const [uploading, setUploading] = useState(false);
   const [editUploading, setEditUploading] = useState(false);
+  const [sendingPush, setSendingPush] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,51 +56,28 @@ export const AdminAnnouncements = () => {
 
   useEffect(() => { reload(); }, []);
 
-  // Upload file to Supabase storage
   const uploadAttachment = async (
     file: File,
     onDone: (url: string, type: string, name: string) => void,
     setLoading: (v: boolean) => void
   ) => {
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      toast.error("File too large. Maximum 10MB.");
-      return;
-    }
-
-    const isPdf = file.type === 'application/pdf';
-    const isImage = file.type.startsWith('image/');
-
-    if (!isPdf && !isImage) {
-      toast.error("Only PDF or image files allowed.");
-      return;
-    }
+    if (file.size > 10 * 1024 * 1024) { toast.error("File too large. Max 10MB."); return; }
+    const isPdf = file.type === "application/pdf";
+    const isImage = file.type.startsWith("image/");
+    if (!isPdf && !isImage) { toast.error("Only PDF or image files allowed."); return; }
 
     setLoading(true);
     try {
-      const ext = file.name.split('.').pop();
+      const ext = file.name.split(".").pop();
       const path = `announcements/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
       const { error: uploadErr } = await supabase.storage
-        .from('announcements')
-        .upload(path, file, { upsert: false });
-
-      if (uploadErr) {
-        toast.error("Upload failed: " + uploadErr.message);
-        return;
-      }
-
-      const { data: urlData } = supabase.storage
-        .from('announcements')
-        .getPublicUrl(path);
-
-      onDone(urlData.publicUrl, isPdf ? 'pdf' : 'image', file.name);
+        .from("announcements").upload(path, file, { upsert: false });
+      if (uploadErr) { toast.error("Upload failed: " + uploadErr.message); return; }
+      const { data: urlData } = supabase.storage.from("announcements").getPublicUrl(path);
+      onDone(urlData.publicUrl, isPdf ? "pdf" : "image", file.name);
       toast.success("File attached!");
-    } catch (e) {
-      toast.error("Upload failed. Try again.");
-    } finally {
-      setLoading(false);
-    }
+    } catch { toast.error("Upload failed. Try again."); }
+    finally { setLoading(false); }
   };
 
   const post = async () => {
@@ -104,37 +87,48 @@ export const AdminAnnouncements = () => {
     const payload: any = {
       title: form.title,
       body: form.body,
-      target_level: (form.target_level || null),
+      target_level: form.target_level || null,
       created_by: user.id,
     };
-
-    // Add attachment if present
     if (form.attachment_url) {
       payload.attachment_url = form.attachment_url;
       payload.attachment_type = form.attachment_type;
       payload.attachment_name = form.attachment_name;
     }
+    if (form.link_url?.trim()) {
+      payload.link_url = form.link_url.trim();
+      payload.link_label = form.link_label?.trim() || "Visit Link";
+    }
 
     const { error } = await withSchemaRetry(async () =>
       await supabase.from("announcements").insert(payload)
     );
-
     if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
 
-    // Send push notification to target users
+    // Send push to Android users, show in-app indicator for iOS
+    setSendingPush(true);
     try {
+      // Determine notification URL — feedback page or home
+      const notifUrl = form.link_url?.trim()
+        ? form.link_url.trim()
+        : (form.title.toLowerCase().includes("request") || form.title.toLowerCase().includes("feedback"))
+          ? "/feedback"
+          : "/";
+
       await sendPushNotification({
-        target_level: form.target_level || "all",
-        target_department: null,
-        title: "HighVault",
+        target_level: form.target_level || null,
+        title: `📢 HighVault${form.target_level ? ` · ${form.target_level}` : ""}`,
         body: form.title.slice(0, 80),
-        url: "/",
+        url: notifUrl,
+        send_to_all: !form.target_level,
       });
-    } catch (e) {
-      console.warn("Push notification send failed:", e);
+      toast.success("Announcement posted! Push notification sent to Android users.");
+    } catch {
+      toast.success("Announcement posted! (Push notification may not have reached all users.)");
+    } finally {
+      setSendingPush(false);
     }
 
-    toast.success("Announcement posted and push notification sent!");
     setForm({ ...emptyForm });
     reload();
   };
@@ -159,52 +153,35 @@ export const AdminAnnouncements = () => {
   const saveEdit = async () => {
     if (!editing) return;
     const payload: any = {
-      title: editing.title,
-      body: editing.body,
-      target_level: (editing.target_level || null),
+      title: editing.title, body: editing.body,
+      target_level: editing.target_level || null,
       is_active: editing.is_active,
       attachment_url: editing.attachment_url || null,
       attachment_type: editing.attachment_type || null,
       attachment_name: editing.attachment_name || null,
+      link_url: editing.link_url?.trim() || null,
+      link_label: editing.link_label?.trim() || null,
     };
     const { error } = await withSchemaRetry(async () =>
       await supabase.from("announcements").update(payload).eq("id", editing.id)
     );
     if (error) { toast.error(getDatabaseErrorMessage(error)); return; }
-    setEditing(null);
-    toast.success("Updated");
-    reload();
-  };
-
-  const removeAttachment = (isEdit: boolean) => {
-    if (isEdit && editing) {
-      setEditing({ ...editing, attachment_url: null, attachment_type: null, attachment_name: null });
-    } else {
-      setForm({ ...form, attachment_url: null, attachment_type: null, attachment_name: null });
-    }
+    setEditing(null); toast.success("Updated"); reload();
   };
 
   const AttachmentPreview = ({
-    url, type, name, onRemove
+    url, type, name, onRemove,
   }: { url: string; type: string; name: string; onRemove: () => void }) => (
     <div className="flex items-center gap-2 p-2 bg-muted/40 rounded-lg border border-border">
-      {type === 'pdf'
-        ? <FileText className="h-4 w-4 text-primary shrink-0" />
-        : <Image className="h-4 w-4 text-primary shrink-0" />
-      }
-      <span className="text-xs flex-1 truncate text-foreground/80">{name}</span>
-      <button onClick={onRemove} className="text-muted-foreground hover:text-destructive">
-        <X className="h-3.5 w-3.5" />
-      </button>
+      {type === "pdf" ? <FileText className="h-4 w-4 text-primary shrink-0" /> : <Image className="h-4 w-4 text-primary shrink-0" />}
+      <span className="text-xs flex-1 truncate">{name}</span>
+      <button onClick={onRemove}><X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" /></button>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        title="Announcements"
-        subtitle="Push notices to all students or by level. Attach PDFs or images."
-      />
+      <SectionHeader title="Announcements" subtitle="Post notices with optional file attachments and links" />
 
       {/* New announcement form */}
       <div className="surface-card p-4 space-y-3">
@@ -213,31 +190,21 @@ export const AdminAnnouncements = () => {
         </p>
 
         <Field label="Title">
-          <input
-            className={inputClass}
-            value={form.title}
+          <input className={inputClass} value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
-            placeholder="Announcement title..."
-          />
+            placeholder="Announcement title..." />
         </Field>
 
         <Field label="Body">
-          <textarea
-            rows={4}
-            className={inputClass}
-            value={form.body}
+          <textarea rows={4} className={inputClass} value={form.body}
             onChange={(e) => setForm({ ...form, body: e.target.value })}
-            placeholder="Full announcement message..."
-          />
+            placeholder="Full message..." />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Target level">
-            <select
-              className={inputClass}
-              value={form.target_level}
-              onChange={(e) => setForm({ ...form, target_level: e.target.value })}
-            >
+            <select className={inputClass} value={form.target_level}
+              onChange={(e) => setForm({ ...form, target_level: e.target.value })}>
               <option value="">All students</option>
               {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
@@ -247,118 +214,77 @@ export const AdminAnnouncements = () => {
           </Field>
         </div>
 
-        {/* Attachment section */}
+        {/* External link */}
+        <Field label="Link URL (optional)">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <input className={`${inputClass} pl-8`} value={form.link_url}
+                onChange={(e) => setForm({ ...form, link_url: e.target.value })}
+                placeholder="https://... or /feedback" />
+            </div>
+            <input className={`${inputClass} w-28`} value={form.link_label}
+              onChange={(e) => setForm({ ...form, link_label: e.target.value })}
+              placeholder="Button text" />
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Use /feedback to direct students to submit a material request
+          </p>
+        </Field>
+
+        {/* Attachment */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground">Attachment (optional)</p>
-
           {form.attachment_url ? (
             <AttachmentPreview
-              url={form.attachment_url}
-              type={form.attachment_type || 'pdf'}
-              name={form.attachment_name || 'Attachment'}
-              onRemove={() => removeAttachment(false)}
+              url={form.attachment_url} type={form.attachment_type || "pdf"}
+              name={form.attachment_name || "Attachment"}
+              onRemove={() => setForm({ ...form, attachment_url: null, attachment_type: null, attachment_name: null })}
             />
           ) : (
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors w-full justify-center"
-            >
-              {uploading ? (
-                <span>Uploading...</span>
-              ) : (
-                <>
-                  <Paperclip className="h-3.5 w-3.5" />
-                  Attach PDF or image
-                </>
-              )}
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+              className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors w-full justify-center">
+              {uploading ? "Uploading..." : <><Paperclip className="h-3.5 w-3.5" /> Attach PDF or image</>}
             </button>
           )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,image/*"
-            className="hidden"
+          <input ref={fileInputRef} type="file" accept=".pdf,image/*" className="hidden"
             onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              uploadAttachment(
-                file,
+              const file = e.target.files?.[0]; if (!file) return;
+              uploadAttachment(file,
                 (url, type, name) => setForm({ ...form, attachment_url: url, attachment_type: type, attachment_name: name }),
-                setUploading
-              );
-              e.target.value = '';
-            }}
-          />
+                setUploading);
+              e.target.value = "";
+            }} />
         </div>
 
-        <button
-          onClick={post}
-          disabled={uploading}
-          className="w-full bg-gradient-button border border-primary/40 text-primary text-sm font-semibold rounded-lg py-2.5 disabled:opacity-50"
-        >
-          Post announcement
+        <button onClick={post} disabled={uploading || sendingPush}
+          className="w-full bg-gradient-button border border-primary/40 text-primary text-sm font-semibold rounded-lg py-2.5 disabled:opacity-50">
+          {sendingPush ? "Sending push notifications..." : "📢 Post + Send Push Notification"}
         </button>
       </div>
 
-      {/* Announcements table */}
+      {/* Table */}
       <div>
         <p className="text-sm font-bold mb-3">Manage ({list.length})</p>
         <TableShell>
-          <thead>
-            <tr>
-              <Th>Title</Th>
-              <Th>Level</Th>
-              <Th>Attachment</Th>
-              <Th>Date</Th>
-              <Th>Active</Th>
-              <Th>Actions</Th>
-            </tr>
-          </thead>
+          <thead><tr><Th>Title</Th><Th>Level</Th><Th>Link</Th><Th>Date</Th><Th>Active</Th><Th>Actions</Th></tr></thead>
           <tbody>
-            {list.length === 0 ? (
-              <EmptyRow cols={6} text="No announcements posted yet." />
-            ) : list.map((a) => (
+            {list.length === 0 ? <EmptyRow cols={6} text="No announcements yet." /> : list.map((a) => (
               <tr key={a.id} className={a.is_active ? "" : "opacity-50"}>
                 <Td className="font-medium max-w-[140px] truncate">{a.title}</Td>
                 <Td>{a.target_level || "All"}</Td>
                 <Td>
-                  {a.attachment_url ? (
-                    <a
-                      href={a.attachment_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary"
-                    >
-                      {a.attachment_type === 'pdf'
-                        ? <FileText className="h-3 w-3" />
-                        : <Image className="h-3 w-3" />
-                      }
-                      View
-                    </a>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
+                  {a.link_url
+                    ? <span className="badge-blue text-[10px]">{a.link_label || "Link"}</span>
+                    : <span className="text-xs text-muted-foreground">—</span>}
                 </Td>
                 <Td className="text-muted-foreground">{new Date(a.created_at).toLocaleDateString()}</Td>
-                <Td>
-                  {a.is_active
-                    ? <span className="badge-green">ON</span>
-                    : <span className="badge-amber">OFF</span>
-                  }
-                </Td>
+                <Td>{a.is_active ? <span className="badge-green">ON</span> : <span className="badge-amber">OFF</span>}</Td>
                 <Td>
                   <div className="flex gap-1">
-                    <ActionBtn onClick={() => setEditing(a)}>
-                      <Pencil className="h-3 w-3" />
-                    </ActionBtn>
-                    <ActionBtn tone="primary" onClick={() => toggleActive(a)}>
-                      {a.is_active ? "Hide" : "Show"}
-                    </ActionBtn>
-                    <ActionBtn tone="danger" onClick={() => remove(a.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </ActionBtn>
+                    <ActionBtn onClick={() => setEditing(a)}><Pencil className="h-3 w-3" /></ActionBtn>
+                    <ActionBtn tone="primary" onClick={() => toggleActive(a)}>{a.is_active ? "Hide" : "Show"}</ActionBtn>
+                    <ActionBtn tone="danger" onClick={() => remove(a.id)}><Trash2 className="h-3 w-3" /></ActionBtn>
                   </div>
                 </Td>
               </tr>
@@ -369,103 +295,48 @@ export const AdminAnnouncements = () => {
 
       {/* Edit modal */}
       {editing && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-          onClick={() => setEditing(null)}
-        >
-          <div
-            className="surface-card p-5 w-full max-w-md space-y-3 max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setEditing(null)}>
+          <div className="surface-card p-5 w-full max-w-md space-y-3 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-bold">Edit announcement</p>
-
-            <Field label="Title">
-              <input
-                className={inputClass}
-                value={editing.title}
-                onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-              />
-            </Field>
-
-            <Field label="Body">
-              <textarea
-                rows={4}
-                className={inputClass}
-                value={editing.body}
-                onChange={(e) => setEditing({ ...editing, body: e.target.value })}
-              />
-            </Field>
-
+            <Field label="Title"><input className={inputClass} value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} /></Field>
+            <Field label="Body"><textarea rows={4} className={inputClass} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} /></Field>
             <Field label="Target level">
-              <select
-                className={inputClass}
-                value={editing.target_level || ""}
-                onChange={(e) => setEditing({ ...editing, target_level: e.target.value || null })}
-              >
+              <select className={inputClass} value={editing.target_level || ""} onChange={(e) => setEditing({ ...editing, target_level: e.target.value || null })}>
                 <option value="">All students</option>
                 {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
               </select>
             </Field>
-
-            {/* Edit attachment */}
+            <Field label="Link URL">
+              <input className={inputClass} value={editing.link_url || ""} onChange={(e) => setEditing({ ...editing, link_url: e.target.value })} placeholder="https://... or /feedback" />
+            </Field>
+            <Field label="Link Button Text">
+              <input className={inputClass} value={editing.link_label || ""} onChange={(e) => setEditing({ ...editing, link_label: e.target.value })} placeholder="Visit Link" />
+            </Field>
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground">Attachment</p>
               {editing.attachment_url ? (
-                <AttachmentPreview
-                  url={editing.attachment_url}
-                  type={editing.attachment_type || 'pdf'}
-                  name={editing.attachment_name || 'Attachment'}
-                  onRemove={() => removeAttachment(true)}
-                />
+                <AttachmentPreview url={editing.attachment_url} type={editing.attachment_type || "pdf"}
+                  name={editing.attachment_name || "Attachment"}
+                  onRemove={() => setEditing({ ...editing, attachment_url: null, attachment_type: null, attachment_name: null })} />
               ) : (
-                <button
-                  onClick={() => editFileInputRef.current?.click()}
-                  disabled={editUploading}
-                  className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors w-full justify-center"
-                >
-                  {editUploading ? 'Uploading...' : <><Paperclip className="h-3.5 w-3.5" /> Attach PDF or image</>}
+                <button onClick={() => editFileInputRef.current?.click()} disabled={editUploading}
+                  className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg text-xs text-muted-foreground hover:border-primary w-full justify-center">
+                  {editUploading ? "Uploading..." : <><Paperclip className="h-3.5 w-3.5" /> Attach PDF or image</>}
                 </button>
               )}
-              <input
-                ref={editFileInputRef}
-                type="file"
-                accept=".pdf,image/*"
-                className="hidden"
+              <input ref={editFileInputRef} type="file" accept=".pdf,image/*" className="hidden"
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  uploadAttachment(
-                    file,
-                    (url, type, name) => setEditing({ ...editing, attachment_url: url, attachment_type: type, attachment_name: name }),
-                    setEditUploading
-                  );
-                  e.target.value = '';
-                }}
-              />
+                  const file = e.target.files?.[0]; if (!file) return;
+                  uploadAttachment(file, (url, type, name) => setEditing({ ...editing, attachment_url: url, attachment_type: type, attachment_name: name }), setEditUploading);
+                  e.target.value = "";
+                }} />
             </div>
-
             <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                checked={editing.is_active}
-                onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })}
-              />
-              Active (visible to students)
+              <input type="checkbox" checked={editing.is_active} onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })} /> Active
             </label>
-
             <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => setEditing(null)}
-                className="flex-1 surface-card py-2 text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveEdit}
-                className="flex-1 bg-gradient-button border border-primary/40 text-primary py-2 text-xs font-semibold rounded-lg"
-              >
-                Save changes
-              </button>
+              <button onClick={() => setEditing(null)} className="flex-1 surface-card py-2 text-xs">Cancel</button>
+              <button onClick={saveEdit} className="flex-1 bg-gradient-button border border-primary/40 text-primary py-2 text-xs font-semibold rounded-lg">Save</button>
             </div>
           </div>
         </div>
