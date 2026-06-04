@@ -258,7 +258,7 @@ export const AdminAnnouncements = () => {
 
         <button onClick={post} disabled={uploading || sendingPush}
           className="w-full bg-gradient-button border border-primary/40 text-primary text-sm font-semibold rounded-lg py-2.5 disabled:opacity-50">
-          {sendingPush ? "Sending push notifications..." : "📢 Post + Send Push Notification"}
+          {sendingPush ? "Sending announcements..." : "📢 Post announcement."}
         </button>
       </div>
 
