@@ -218,13 +218,17 @@ export const AdminAnnouncements = () => {
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <input className={`${inputClass} pl-8`} value={form.link_url}
-                onChange={(e) => setForm({ ...form, link_url: e.target.value })}
-                placeholder="https://... or /feedback" />
+              <input 
+              className={`${inputClass} pl-8 text-foreground`} value={form.link_url}
+              onChange={(e) => setForm({ ...form, link_url: e.target.value })}
+              placeholder="https://... or /feedback" 
+            />
             </div>
-            <input className={`${inputClass} w-28`} value={form.link_label}
-              onChange={(e) => setForm({ ...form, link_label: e.target.value })}
-              placeholder="Button text" />
+            <input 
+            className={`${inputClass} w-28 text-foreground`} value={form.link_label}
+            onChange={(e) => setForm({ ...form, link_label: e.target.value })}
+            placeholder="Button text" 
+          />
           </div>
           <p className="text-[10px] text-muted-foreground mt-1">
             Use /feedback to direct students to submit a material request
