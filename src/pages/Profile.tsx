@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Flame, Award, LogOut, GraduationCap, Building2, BookOpen, Hash, Mail, Shield, ArrowRight, Sun, Moon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const THEME_KEY = "hv_theme";
 type Theme = "dark" | "light";
@@ -14,27 +15,24 @@ const applyTheme = (theme: Theme) => {
 };
 
 const Profile = () => {
-  const { profile, isAdmin, roleLabel, signOut, session } = useAuth();
+  const { profile, isAdmin, isRep, roleLabel, signOut, session } = useAuth();
   const navigate = useNavigate();
   const [freshProfile, setFreshProfile] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [theme, setTheme] = useState<Theme>((localStorage.getItem(THEME_KEY) as Theme) || "dark");
-  const showAdminEntry = isAdmin || isHardcodedAdminEmail(session?.user?.email || profile?.email);
+
+  // Show admin/rep panel button for admins, hardcoded admins, AND class reps
+  const showAdminEntry = isAdmin || isRep || isHardcodedAdminEmail(session?.user?.email || profile?.email);
   const profileData = freshProfile;
 
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+  useEffect(() => { applyTheme(theme); }, [theme]);
 
   useEffect(() => {
     const fetchProfile = async () => {
       if (!session?.user?.id) return;
       setProfileLoading(true);
       const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
+        .from("profiles").select("*").eq("id", session.user.id).single();
       if (data) setFreshProfile(data);
       if (error) console.error("Profile fetch error:", error);
       setProfileLoading(false);
@@ -46,11 +44,7 @@ const Profile = () => {
   }, [session?.user?.id]);
 
   const initials = (profileData?.full_name || profileData?.email || "U")
-    .split(" ")
-    .map((s: string) => s[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+    .split(" ").map((s: string) => s[0]).join("").slice(0, 2).toUpperCase();
 
   const xp = profileData?.xp ?? 0;
   const nextMilestone = Math.ceil((xp + 1) / 100) * 100;
@@ -67,22 +61,26 @@ const Profile = () => {
         </div>
         <h1 className="text-xl font-bold text-white">{profileData?.full_name || "Student"}</h1>
         <p className="text-sm text-white/80 mt-0.5">{profileData?.email || (profileLoading ? "Loading…" : "")}</p>
-        <span
-          className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
-            isAdmin ? "bg-secondary/20 text-secondary" : roleLabel === "Class Rep" ? "bg-primary/20 text-primary" : "bg-white/15 text-white"
-          }`}
-        >
+        <span className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+          isAdmin ? "bg-secondary/20 text-secondary"
+          : isRep ? "bg-primary/20 text-primary"
+          : "bg-white/15 text-white"
+        }`}>
           <Shield className="h-3 w-3" /> {roleLabel}
         </span>
       </div>
 
-      {/* Admin entry point — always visible to admins */}
+      {/* Admin/Rep panel entry */}
       {showAdminEntry && (
         <Button
           onClick={() => navigate("/admin")}
           className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
         >
-          Go to Admin Panel <ArrowRight className="h-4 w-4 ml-2" />
+          {isAdmin || isHardcodedAdminEmail(session?.user?.email || profile?.email)
+            ? "⚙️ Admin Panel"
+            : "📚 Rep Panel"
+          }
+          <ArrowRight className="h-4 w-4 ml-2" />
         </Button>
       )}
 
@@ -111,8 +109,7 @@ const Profile = () => {
 
       <Button
         onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-        variant="outline"
-        className="w-full bg-surface border-border h-12"
+        variant="outline" className="w-full bg-surface border-border h-12"
       >
         {theme === "dark" ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
         {theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -129,69 +126,58 @@ const Profile = () => {
       </div>
 
       {/* Clear Downloads */}
-<div className="surface-card p-4 space-y-3">
-  <div>
-    <p className="text-sm font-semibold">Storage & Downloads</p>
-    <p className="text-xs text-muted-foreground mt-1">
-      Remove all downloaded PDFs from your device. Your account and bookmarks are kept. Re-download anytime.
-    </p>
-  </div>
-  <Button
-    variant="outline"
-    className="w-full bg-surface border-border text-sm h-11"
-    onClick={async () => {
-      if (!confirm("Remove all downloaded PDFs from this device? You can re-download them anytime.")) return;
-      try {
-        // Clear localStorage download records
-        const keysToDelete: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && (
-            key.startsWith('hv_dl_') ||
-            key.startsWith('hv_local_') ||
-            key === 'hv_local_pdf_paths' ||
-            key === 'hv_cache_downloads'
-          )) keysToDelete.push(key);
-        }
-        keysToDelete.forEach(k => localStorage.removeItem(k));
-
-        // Delete physical files from device
-        try {
-          const { Filesystem, Directory } = await import('@capacitor/filesystem');
-          try {
-            const { files } = await Filesystem.readdir({
-              path: 'highvault/chapters',
-              directory: Directory.Cache,
-            });
-            for (const file of files) {
+      <div className="surface-card p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Storage & Downloads</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Remove all downloaded PDFs from your device. Account and bookmarks are kept.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          className="w-full bg-surface border-border text-sm h-11"
+          onClick={async () => {
+            if (!confirm("Remove all downloaded PDFs? You can re-download anytime.")) return;
+            try {
+              const keysToDelete: string[] = [];
+              for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.startsWith('hv_dl_') || key.startsWith('hv_local_') ||
+                  key === 'hv_local_pdf_paths' || key === 'hv_cache_downloads')) {
+                  keysToDelete.push(key);
+                }
+              }
+              keysToDelete.forEach(k => localStorage.removeItem(k));
               try {
-                await Filesystem.deleteFile({
-                  path: `highvault/chapters/${file.name}`,
-                  directory: Directory.Cache,
-                });
+                const { Filesystem, Directory } = await import('@capacitor/filesystem');
+                try {
+                  const { files } = await Filesystem.readdir({
+                    path: 'highvault/chapters', directory: Directory.Cache,
+                  });
+                  for (const file of files) {
+                    try {
+                      await Filesystem.deleteFile({
+                        path: `highvault/chapters/${file.name}`, directory: Directory.Cache,
+                      });
+                    } catch {}
+                  }
+                } catch {}
               } catch {}
+              if (session?.user?.id) {
+                await supabase.from('downloads').delete().eq('user_id', session.user.id);
+              }
+              toast.success("Downloads cleared successfully!");
+              setTimeout(() => window.location.reload(), 1000);
+            } catch {
+              toast.success("Local downloads cleared!");
+              setTimeout(() => window.location.reload(), 1000);
             }
-          } catch {}
-        } catch {}
+          }}
+        >
+          🗑️ Clear Downloaded PDFs
+        </Button>
+      </div>
 
-        // Clear download records from Supabase
-        if (session?.user?.id) {
-          await supabase.from('downloads').delete().eq('user_id', session.user.id);
-        }
-
-        toast.success("Downloads cleared successfully!");
-        setTimeout(() => window.location.reload(), 1000);
-      } catch (e) {
-        console.error('Clear cache error:', e);
-        toast.success("Local downloads cleared!");
-        setTimeout(() => window.location.reload(), 1000);
-      }
-    }}
-  >
-    🗑️ Clear Downloaded PDFs
-  </Button>
-</div>
-      
       <Button
         onClick={async () => { await signOut(); navigate("/welcome"); }}
         variant="outline"
@@ -201,9 +187,8 @@ const Profile = () => {
       </Button>
 
       <p className="text-center text-[11px] text-muted-foreground/70 pt-2">
-         Designed &amp; Built by HIGHBEE 🍯🐝
+        Designed &amp; Built by HIGHBEE 🍯🐝
       </p>
-
       <div className="h-4" />
     </div>
   );
