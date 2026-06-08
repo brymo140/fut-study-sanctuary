@@ -171,8 +171,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const today = new Date().toISOString().slice(0, 10);
       const last = normalizedProfile.last_active;
       if (last !== today) {
-const daysSinceLast = last ? Math.floor((Date.now() - new Date(last).getTime()) / (1000 * 60 * 60 * 24)) : 999;
-const newStreak = daysSinceLast <= 1 ? (normalizedProfile.streak || 0) + 1 : daysSinceLast <= 2 ? (normalizedProfile.streak || 1) : 1;                                    
+        const daysSinceLast = last
+  ? Math.floor((Date.now() - new Date(last).getTime()) / (1000 * 60 * 60 * 24))
+  : 999;
+const newStreak = daysSinceLast <= 1
+  ? (normalizedProfile.streak || 0) + 1
+  : daysSinceLast <= 2
+  ? (normalizedProfile.streak || 1)
+  : 1;
         await withSchemaRetry(async () =>
           await supabase
             .from("profiles")
