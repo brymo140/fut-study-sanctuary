@@ -44,6 +44,8 @@ interface Bookmarked {
 
 const LOCAL_PATHS_KEY = "hv_local_pdf_paths";
 const DL_PREFIX = "hv_dl_";
+const CACHE_KEY_DOWNLOADS = "hv_cache_downloads";
+const CACHE_KEY_BOOKMARKS = "hv_cache_bookmarks";
 
 const loadLocalPaths = (): Record<string, string> => {
   try {
@@ -59,64 +61,79 @@ const saveLocalPath = (chapterId: string, uri: string) => {
   localStorage.setItem(LOCAL_PATHS_KEY, JSON.stringify(all));
 };
 
+// ─── Load cache synchronously — always returns arrays, never throws ───────────
+const loadCachedGroups = (): SubjectGroup[] => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY_DOWNLOADS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((g: any) => ({
+      ...g,
+      downloadedChapterIds: new Set<string>(
+        Array.isArray(g.downloadedChapterIds) ? g.downloadedChapterIds : []
+      ),
+      localPaths: g.localPaths || {},
+    }));
+  } catch {
+    return [];
+  }
+};
+
+const loadCachedBookmarks = (): Bookmarked[] => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY_BOOKMARKS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 const Downloads = () => {
   const { user } = useAuth();
-  const [groups, setGroups] = useState<SubjectGroup[]>([]);
-  const [bookmarks, setBookmarks] = useState<Bookmarked[]>([]);
+
+  // ── Initialise state directly from cache — no empty flash on mount ──────────
+  const [groups, setGroups] = useState<SubjectGroup[]>(() => loadCachedGroups());
+  const [bookmarks, setBookmarks] = useState<Bookmarked[]>(() => loadCachedBookmarks());
+
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [view, setView] = useState<{ ch: Chapter; subject: Subject; storagePath: string } | null>(null);
   const [unlock, setUnlock] = useState<{ ch: Chapter; subject: Subject } | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(false);
-  const [loading, setLoading] = useState(true);
+  // loading = true only when we have NO cache at all and are waiting for network
+  const [loading, setLoading] = useState(() => loadCachedGroups().length === 0 && loadCachedBookmarks().length === 0);
   const [iosPdfUrl, setIosPdfUrl] = useState<string | null>(null);
 
-  const ios = typeof navigator !== 'undefined' && (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const ios =
+    typeof navigator !== "undefined" &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+
+  const totalModules = useMemo(
+    () => groups.reduce((acc, g) => acc + g.downloadedChapterIds.size, 0),
+    [groups]
   );
-
-  const CACHE_KEY_DOWNLOADS = 'hv_cache_downloads';
-  const CACHE_KEY_BOOKMARKS = 'hv_cache_bookmarks';
-
-  const totalModules = useMemo(() => {
-    return groups.reduce((acc, current) => acc + current.downloadedChapterIds.size, 0);
-  }, [groups]);
 
   const load = async () => {
     if (!user) return;
-    setLoading(true);
 
-    const cachedDownloads = localStorage.getItem(CACHE_KEY_DOWNLOADS);
-    const cachedBookmarks = localStorage.getItem(CACHE_KEY_BOOKMARKS);
+    // Only show spinner if we have nothing cached to show yet
+    const hasCached =
+      loadCachedGroups().length > 0 || loadCachedBookmarks().length > 0;
+    if (!hasCached) setLoading(true);
 
-    if (cachedDownloads) {
-      try {
-        const parsed = JSON.parse(cachedDownloads);
-        const restored = parsed.map((g: any) => ({
-          ...g,
-          downloadedChapterIds: new Set<string>(g.downloadedChapterIds),
-          localPaths: g.localPaths || {}
-        }));
-        setGroups(restored);
-        setLoading(false);
-      } catch {}
-    }
-
-    if (cachedBookmarks) {
-      try {
-        setBookmarks(JSON.parse(cachedBookmarks));
-      } catch {}
-    }
-
+    // If offline, cache is already in state from useState initialiser — just stop loading
     if (!navigator.onLine) {
       setLoading(false);
       return;
     }
 
     try {
-      const { data } = await supabase
-        .from('downloads')
+      const { data, error } = await supabase
+        .from("downloads")
         .select(`
           chapter_id,
           downloaded_at,
@@ -138,8 +155,10 @@ const Downloads = () => {
             )
           )
         `)
-        .eq('user_id', user.id)
-        .order('downloaded_at', { ascending: false });
+        .eq("user_id", user.id)
+        .order("downloaded_at", { ascending: false });
+
+      if (error) throw error;
 
       const downloads = (data as any[]) || [];
       const pdfMap = new Map<string, any>();
@@ -155,7 +174,7 @@ const Downloads = () => {
             subject: pdf,
             chapters: [],
             downloadedChapterIds: new Set<string>(),
-            localPaths
+            localPaths,
           });
         }
         const group = pdfMap.get(pdf.id);
@@ -166,25 +185,33 @@ const Downloads = () => {
       const result = Array.from(pdfMap.values());
       setGroups(result);
 
-      const cacheable = result.map(g => ({
+      // Persist to cache (serialize Set → Array)
+      const cacheable = result.map((g) => ({
         ...g,
         downloadedChapterIds: Array.from(g.downloadedChapterIds),
       }));
       localStorage.setItem(CACHE_KEY_DOWNLOADS, JSON.stringify(cacheable));
 
-      const { data: bm } = await supabase
+      // Fetch bookmarks
+      const { data: bm, error: bmError } = await supabase
         .from("bookmarks")
         .select("pdf:pdfs(id,title,course_code,level)")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      const bmData = ((bm as any[]) || []).map((b) => b.pdf).filter(Boolean);
-      setBookmarks(bmData);
-      localStorage.setItem(CACHE_KEY_BOOKMARKS, JSON.stringify(bmData));
+      if (!bmError) {
+        const bmData = ((bm as any[]) || [])
+          .map((b) => b.pdf)
+          .filter(Boolean);
+        setBookmarks(bmData);
+        localStorage.setItem(CACHE_KEY_BOOKMARKS, JSON.stringify(bmData));
+      }
     } catch (e) {
-      console.error('[Downloads] fetch failed:', e);
+      console.error("[Downloads] Network fetch failed, showing cache:", e);
+      // Cache is already in state — nothing extra needed
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -211,7 +238,7 @@ const Downloads = () => {
       });
 
       if (dlErr) {
-        console.error("[Downloads] downloads insert failed; retrying without downloaded_at", dlErr);
+        console.error("[Downloads] insert failed, retrying without downloaded_at:", dlErr);
         await supabase.from("downloads").insert({
           user_id: user.id,
           chapter_id: ch.id,
@@ -231,14 +258,13 @@ const Downloads = () => {
     }
   };
 
-  // Opens a downloaded PDF — iOS shows popup with anchor link, Android uses PdfViewer
   const handleReadChapter = async (ch: Chapter, subject: Subject) => {
     if (ios) {
       try {
         const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
-        if (cachedFile && !cachedFile.startsWith('data:')) {
+        if (cachedFile && !cachedFile.startsWith("data:")) {
           try {
-            const { Filesystem, Directory } = await import('@capacitor/filesystem');
+            const { Filesystem, Directory } = await import("@capacitor/filesystem");
             await Filesystem.stat({
               path: `highvault/chapters/${cachedFile}`,
               directory: Directory.Cache,
@@ -250,28 +276,28 @@ const Downloads = () => {
             const base64 = result.data as string;
             const byteChars = atob(base64);
             const byteArr = new Uint8Array(byteChars.length);
-            for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-            const blob = new Blob([byteArr], { type: 'application/pdf' });
+            for (let i = 0; i < byteChars.length; i++)
+              byteArr[i] = byteChars.charCodeAt(i);
+            const blob = new Blob([byteArr], { type: "application/pdf" });
             setIosPdfUrl(URL.createObjectURL(blob));
             return;
           } catch {
             localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
           }
         }
-        // Fallback to signed URL
         const { data } = await supabase.storage
-          .from('chapters').createSignedUrl(ch.storage_path, 3600);
+          .from("chapters")
+          .createSignedUrl(ch.storage_path, 3600);
         if (data?.signedUrl) {
           setIosPdfUrl(data.signedUrl);
         } else {
-          toast.error('File not found. Try downloading again.');
+          toast.error("File not found. Try downloading again.");
         }
       } catch {
-        toast.error('Could not open PDF.');
+        toast.error("Could not open PDF.");
       }
       return;
     }
-    // Android — open in PdfViewer
     setView({ ch, subject, storagePath: ch.storage_path });
   };
 
@@ -290,17 +316,22 @@ const Downloads = () => {
       <div>
         <h1 className="text-2xl font-bold">Library 📚</h1>
         <p className="text-sm text-muted-foreground">
-          {totalModules} module{totalModules !== 1 && "s"} downloaded across {groups.length} subject{groups.length !== 1 && "s"}
+          {totalModules} module{totalModules !== 1 && "s"} downloaded across{" "}
+          {groups.length} subject{groups.length !== 1 && "s"}
         </p>
       </div>
 
       {loading ? (
         <div className="space-y-3">
-          {[1, 2, 3].map(i => <div key={i} className="surface-card h-24 animate-pulse" />)}
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="surface-card h-24 animate-pulse" />
+          ))}
         </div>
       ) : groups.length === 0 && bookmarks.length === 0 ? (
         <div className="surface-card p-10 text-center text-sm text-muted-foreground">
-          Your library is empty 📚<br />Browse subjects to start reading!
+          {!navigator.onLine
+            ? "You're offline and have no cached library yet 📴"
+            : "Your library is empty 📚\nBrowse subjects to start reading!"}
         </div>
       ) : (
         <>
@@ -311,12 +342,18 @@ const Downloads = () => {
             return (
               <section key={g.subject.id} className="surface-card overflow-hidden">
                 <button
-                  onClick={() => setExpanded((e) => ({ ...e, [g.subject.id]: !e[g.subject.id] }))}
+                  onClick={() =>
+                    setExpanded((e) => ({ ...e, [g.subject.id]: !e[g.subject.id] }))
+                  }
                   className="w-full p-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors"
                 >
                   <div className="h-14 w-14 shrink-0 rounded-lg bg-gradient-cover overflow-hidden flex items-center justify-center">
                     {g.subject.cover_url ? (
-                      <img src={g.subject.cover_url} alt="" className="h-full w-full object-cover" />
+                      <img
+                        src={g.subject.cover_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
                       <FileText className="h-6 w-6 text-white/90" />
                     )}
@@ -324,14 +361,19 @@ const Downloads = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold line-clamp-1">{g.subject.title}</p>
                     <p className="text-[11px] text-muted-foreground">
-                      {g.subject.course_code} · <span className="badge-blue ml-0.5">{g.subject.level}</span>{" "}
-                      {g.subject.is_past_question && <span className="badge-amber ml-1">Past Q</span>}
+                      {g.subject.course_code} ·{" "}
+                      <span className="badge-blue ml-0.5">{g.subject.level}</span>{" "}
+                      {g.subject.is_past_question && (
+                        <span className="badge-amber ml-1">Past Q</span>
+                      )}
                     </p>
                     <div className="flex items-center gap-2 mt-1.5">
                       <div className="flex-1 h-1 rounded-full bg-border overflow-hidden">
                         <div
                           className="h-full bg-gradient-brand transition-all"
-                          style={{ width: `${total ? (downloaded / total) * 100 : 0}%` }}
+                          style={{
+                            width: `${total ? (downloaded / total) * 100 : 0}%`,
+                          }}
                         />
                       </div>
                       <span className="text-[10px] text-muted-foreground font-medium">
@@ -352,7 +394,9 @@ const Downloads = () => {
                             M{ch.chapter_number}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold line-clamp-1">{ch.title}</p>
+                            <p className="text-xs font-semibold line-clamp-1">
+                              {ch.title}
+                            </p>
                             <p className="text-[10px] text-muted-foreground">
                               {isDownloaded ? "On device" : "Not downloaded"}
                             </p>
@@ -364,7 +408,7 @@ const Downloads = () => {
                                 className="inline-flex items-center gap-1 bg-success/15 border border-success/40 text-success text-[11px] font-bold rounded-md px-2.5 py-1.5"
                               >
                                 <BookOpen className="h-3 w-3" />
-                                {ios ? 'Open' : 'Read 📖'}
+                                {ios ? "Open" : "Read 📖"}
                               </button>
                               <button
                                 onClick={async () => {
@@ -372,17 +416,25 @@ const Downloads = () => {
                                   try {
                                     localStorage.removeItem(`${DL_PREFIX}${ch.id}`);
                                     try {
-                                      const { Filesystem, Directory } = await import('@capacitor/filesystem');
-                                      const fileName = `${g.subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`.replace(/[^a-z0-9._-]/gi, "_");
+                                      const { Filesystem, Directory } = await import(
+                                        "@capacitor/filesystem"
+                                      );
+                                      const fileName =
+                                        `${g.subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`.replace(
+                                          /[^a-z0-9._-]/gi,
+                                          "_"
+                                        );
                                       await Filesystem.deleteFile({
                                         path: `highvault/chapters/${fileName}`,
                                         directory: Directory.Cache,
                                       });
                                     } catch {}
                                     if (user?.id) {
-                                      await supabase.from('downloads').delete()
-                                        .eq('user_id', user.id)
-                                        .eq('chapter_id', ch.id);
+                                      await supabase
+                                        .from("downloads")
+                                        .delete()
+                                        .eq("user_id", user.id)
+                                        .eq("chapter_id", ch.id);
                                     }
                                     toast.success("Deleted from library");
                                     await load();
@@ -401,7 +453,11 @@ const Downloads = () => {
                               disabled={isBusy || !navigator.onLine}
                               className="inline-flex items-center gap-1 bg-gradient-brand border border-primary/40 text-primary text-[11px] font-bold rounded-md px-2.5 py-1.5 disabled:opacity-50"
                             >
-                              {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                              {isBusy ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Download className="h-3 w-3" />
+                              )}
                               {isBusy ? "Saving" : "Download ⬇"}
                             </button>
                           )}
@@ -444,7 +500,7 @@ const Downloads = () => {
         </>
       )}
 
-      {/* iOS PDF opener — OUTSIDE the ternary so it always renders */}
+      {/* iOS PDF opener */}
       {iosPdfUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/80 backdrop-blur-md">
           <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm text-center space-y-4 shadow-xl">
@@ -453,7 +509,9 @@ const Downloads = () => {
             </div>
             <div>
               <p className="font-semibold text-sm">Material Ready</p>
-              <p className="text-xs text-muted-foreground mt-1">Tap below to open in Safari reader</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Tap below to open in Safari reader
+              </p>
             </div>
             <a
               href={iosPdfUrl}
@@ -474,7 +532,7 @@ const Downloads = () => {
         </div>
       )}
 
-      {/* Modals — OUTSIDE the ternary */}
+      {/* Modals */}
       <WatchToUnlockModal
         open={!!unlock}
         chapterTitle={unlock?.ch.title || ""}
