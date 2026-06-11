@@ -27,22 +27,29 @@ export const InterstitialAdHost = () => {
     (async () => {
       try {
         if (kind === "rewarded-interstitial") {
-          // Show rewarded interstitial — user gets XP bonus for watching
           const granted = await showRewardedInterstitial();
-          AdSession.markInterstitialShown();
-          if (granted && user) {
-            const { data: prof } = await supabase
-              .from("profiles").select("xp").eq("id", user.id).maybeSingle();
-            await supabase
-              .from("profiles").update({ xp: (prof?.xp || 0) + 25 }).eq("id", user.id);
-            refreshProfile();
-            toast.success("+25 XP Bonus! 🎉");
+          if (granted) {
+            // Only mark shown + give XP if the ad actually completed
+            AdSession.markInterstitialShown();
+            if (user) {
+              const { data: prof } = await supabase
+                .from("profiles").select("xp").eq("id", user.id).maybeSingle();
+              await supabase
+                .from("profiles").update({ xp: (prof?.xp || 0) + 25 }).eq("id", user.id);
+              refreshProfile();
+              toast.success("+25 XP Bonus! 🎉");
+            }
           }
+          // If granted=false (ad failed), timer is NOT reset — it will try again next navigation
         } else {
-          // Show regular interstitial
-          await showInterstitial();
-          AdSession.markInterstitialShown();
+          const shown = await showInterstitial();
+          if (shown) {
+            AdSession.markInterstitialShown();
+          }
+          // If ad failed, timer resets on next navigation attempt
         }
+      } catch (e) {
+        console.warn("[InterstitialAdHost] Ad error:", e);
       } finally {
         showing.current = false;
       }
