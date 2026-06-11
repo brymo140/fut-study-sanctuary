@@ -116,8 +116,8 @@ export const AdminAnnouncements = () => {
 
       await sendPushNotification({
         target_level: form.target_level || null,
-        title: `📢 HighVault${form.target_level ? ` · ${form.target_level}` : ""}`,
-        body: form.title.slice(0, 80),
+        title: form.title.slice(0, 80),
+        body: form.body.slice(0, 100),
         url: notifUrl,
         send_to_all: !form.target_level,
       });
@@ -215,21 +215,21 @@ export const AdminAnnouncements = () => {
 
         {/* External link */}
         <Field label="Link URL (optional)">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <input 
-              className={`${inputClass} pl-8 text-foreground`} value={form.link_url}
+          <div className="relative">
+            <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              className={`${inputClass} pl-8 text-foreground`}
+              value={form.link_url}
               onChange={(e) => setForm({ ...form, link_url: e.target.value })}
-              placeholder="https://... or /feedback" 
+              placeholder="https://... or /feedback"
             />
-            </div>
-            <input 
-            className={`${inputClass} w-28 text-foreground`} value={form.link_label}
-            onChange={(e) => setForm({ ...form, link_label: e.target.value })}
-            placeholder="Button text" 
-          />
           </div>
+          <input
+            className={`${inputClass} text-foreground mt-2`}
+            value={form.link_label}
+            onChange={(e) => setForm({ ...form, link_label: e.target.value })}
+            placeholder="Button text (e.g. View details)"
+          />
           <p className="text-[10px] text-muted-foreground mt-1">
             Use /feedback to direct students to submit a material request
           </p>
