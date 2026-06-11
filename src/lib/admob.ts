@@ -2,6 +2,7 @@ import {
   AdMob,
   BannerAdSize,
   BannerAdPosition,
+  AdMobRewardItem,
 } from "@capacitor-community/admob";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
@@ -63,14 +64,31 @@ export const showRewardedAd = async (): Promise<boolean> => {
   } catch (e) { console.warn("Rewarded failed", e); return false; }
 };
 
-// REWARDED INTERSTITIAL — for YouTube
+// REWARDED INTERSTITIAL — for YouTube / navigation triggers
+// Uses prepareRewardedInterstitialAd (NOT prepareRewardVideoAd — that's for rewarded only)
+let rewardedInterstitialReady = false;
+
+export const preloadRewardedInterstitial = async () => {
+  if (!isNative() || !isOnline()) return;
+  await initAdMob();
+  try {
+    await AdMob.prepareRewardedInterstitialAd({ adId: AD_UNITS.rewardedInterstitial, isTesting: false });
+    rewardedInterstitialReady = true;
+  } catch { rewardedInterstitialReady = false; }
+};
+
 export const showRewardedInterstitial = async (): Promise<boolean> => {
   if (!isOnline()) return false;
   if (!isNative()) return true;
   await initAdMob();
   try {
-    await AdMob.prepareRewardVideoAd({ adId: AD_UNITS.rewardedInterstitial, isTesting: false });
-    const result = await AdMob.showRewardVideoAd();
+    if (!rewardedInterstitialReady) {
+      await AdMob.prepareRewardedInterstitialAd({ adId: AD_UNITS.rewardedInterstitial, isTesting: false });
+    }
+    rewardedInterstitialReady = false;
+    const result: AdMobRewardItem = await AdMob.showRewardedInterstitialAd();
+    // Preload next one in background
+    preloadRewardedInterstitial();
     return !!result;
   } catch (e) { console.warn("Rewarded interstitial failed", e); return false; }
 };
@@ -87,9 +105,11 @@ export const showInterstitial = async (): Promise<boolean> => {
   } catch (e) { console.warn("Interstitial failed", e); return false; }
 };
 
-// BANNER — persistent bottom, only Android
+// BANNER — persistent bottom, only Android/iOS native
+// Note: AdMob handles banner refresh automatically (every ~60s).
+// Do NOT call resumeBanner() on a manual interval — it causes flickering
+// and can flag the account. Just show once and let the SDK manage it.
 let bannerVisible = false;
-let bannerInterval: ReturnType<typeof setInterval> | null = null;
 
 export const showBanner = async () => {
   if (!isOnline() || !isNative()) return;
@@ -103,20 +123,11 @@ export const showBanner = async () => {
       isTesting: false,
     });
     bannerVisible = true;
-    if (bannerInterval) clearInterval(bannerInterval);
-    bannerInterval = setInterval(async () => {
-      if (bannerVisible && isOnline() && isNative()) {
-        try { await AdMob.resumeBanner(); } catch {
-          try { await AdMob.showBanner({ adId: AD_UNITS.banner, adSize: BannerAdSize.ADAPTIVE_BANNER, position: BannerAdPosition.BOTTOM_CENTER, margin: 0, isTesting: false }); } catch {}
-        }
-      }
-    }, 45000);
   } catch (e) { console.warn("Banner failed", e); }
 };
 
 export const hideBanner = async () => {
   if (!isNative()) return;
-  if (bannerInterval) { clearInterval(bannerInterval); bannerInterval = null; }
   if (!bannerVisible) return;
   try { await AdMob.hideBanner(); } catch {}
   bannerVisible = false;
