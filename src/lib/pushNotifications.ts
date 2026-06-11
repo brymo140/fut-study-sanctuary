@@ -9,17 +9,14 @@ export const initPushNotifications = async (userId: string) => {
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications');
 
-    // Check current permission status first
     const currentPerm = await PushNotifications.checkPermissions();
     console.log('[Push] Current permission:', currentPerm.receive);
 
     if (currentPerm.receive === 'denied') {
-      // Already denied — show in-app message to guide user
-      console.log('[Push] Notification permission denied by user');
+      console.log('[Push] Permission denied by user — skipping');
       return;
     }
 
-    // Request permission (shows dialog if not yet decided)
     const permResult = await PushNotifications.requestPermissions();
     console.log('[Push] Permission result:', permResult.receive);
 
@@ -28,29 +25,35 @@ export const initPushNotifications = async (userId: string) => {
       return;
     }
 
-    // Register for push notifications
-    await PushNotifications.register();
-    console.log('[Push] Registered');
-
-    // Remove old listeners to avoid duplicates
+    // Remove old listeners first to avoid duplicate registrations
     await PushNotifications.removeAllListeners();
 
+    // Register — token arrives in the 'registration' listener below
+    await PushNotifications.register();
+    console.log('[Push] Registered with FCM');
+
     PushNotifications.addListener('registration', async (token) => {
-      console.log('[Push] Token received:', token.value);
+      console.log('[Push] FCM token received:', token.value.slice(0, 30) + '...');
       try {
-        const { error } = await supabase.from('push_tokens').upsert({
-          user_id: userId,
-          token: token.value,
-          platform: 'android',
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
+        // IMPORTANT: onConflict must be 'user_id' — the table now has UNIQUE(user_id)
+        // (not the old composite UNIQUE(user_id, token) which broke this upsert)
+        const { error } = await supabase.from('push_tokens').upsert(
+          {
+            user_id: userId,
+            token: token.value,           // column is "token" not "fcm_token"
+            platform: Capacitor.getPlatform(), // 'android' or 'ios'
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }        // one row per user, always latest token
+        );
+
         if (error) {
-          console.error('[Push] Token save error:', error);
+          console.error('[Push] Token upsert error:', error.message, error.code);
         } else {
-          console.log('[Push] Token saved successfully');
+          console.log('[Push] Token saved to Supabase ✓');
         }
       } catch (e) {
-        console.error('[Push] Token save failed:', e);
+        console.error('[Push] Token save exception:', e);
       }
     });
 
@@ -59,9 +62,8 @@ export const initPushNotifications = async (userId: string) => {
     });
 
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
-      console.log('[Push] Notification received in foreground:', notification.title);
-      // Show in-app toast when notification arrives while app is open
-      toast(notification.title || 'New notification', {
+      console.log('[Push] Foreground notification:', notification.title);
+      toast(notification.title || 'HighVault 📚', {
         description: notification.body,
       });
     });
@@ -75,7 +77,7 @@ export const initPushNotifications = async (userId: string) => {
     });
 
   } catch (e) {
-    console.error('[Push] Init failed:', e);
+    console.error('[Push] initPushNotifications failed:', e);
   }
 };
 
@@ -91,7 +93,7 @@ interface PushPayload {
 
 export const sendPushNotification = async (payload: PushPayload) => {
   try {
-    const body: any = {
+    const body: Record<string, unknown> = {
       title: payload.title,
       body: payload.body,
     };
@@ -99,21 +101,24 @@ export const sendPushNotification = async (payload: PushPayload) => {
     if (payload.user_ids?.length) {
       body.user_ids = payload.user_ids;
     } else if (payload.target_level && payload.target_level !== 'all') {
-      body.level = payload.target_level;
+      body.target_level = payload.target_level;
+      if (payload.target_department) {
+        body.target_department = payload.target_department;
+      }
     } else {
       body.send_to_all = true;
     }
 
-    if (payload.url) body.data = { url: payload.url };
+    if (payload.url) body.url = payload.url;
 
     const { data, error } = await supabase.functions.invoke('send-push', { body });
     if (error) {
-      console.error('[Push] send-push error:', error);
+      console.error('[Push] send-push invoke error:', error);
     } else {
-      console.log('[Push] Sent successfully:', data);
+      console.log('[Push] send-push response:', data);
     }
   } catch (err) {
-    console.warn('[Push] sendPushNotification failed:', err);
+    console.warn('[Push] sendPushNotification exception:', err);
   }
 };
 
