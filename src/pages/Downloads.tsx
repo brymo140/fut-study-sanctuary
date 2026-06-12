@@ -46,6 +46,9 @@ const LOCAL_PATHS_KEY = "hv_local_pdf_paths";
 const DL_PREFIX = "hv_dl_";
 const CACHE_KEY_DOWNLOADS = "hv_cache_downloads";
 const CACHE_KEY_BOOKMARKS = "hv_cache_bookmarks";
+// Manifest: maps chapterId → { chapter, subject } so we can rebuild groups offline
+// from just the hv_dl_* keys without needing Supabase
+const CACHE_KEY_MANIFEST = "hv_chapter_manifest";
 
 const loadLocalPaths = (): Record<string, string> => {
   try {
@@ -61,13 +64,49 @@ const saveLocalPath = (chapterId: string, uri: string) => {
   localStorage.setItem(LOCAL_PATHS_KEY, JSON.stringify(all));
 };
 
+// ─── Chapter manifest: saved on every successful network fetch ────────────────
+interface ManifestEntry { chapter: Chapter; subject: Subject; }
+const loadManifest = (): Record<string, ManifestEntry> => {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY_MANIFEST) || "{}"); } catch { return {}; }
+};
+const saveManifest = (groups: SubjectGroup[]) => {
+  const manifest: Record<string, ManifestEntry> = {};
+  groups.forEach(g => g.chapters.forEach(ch => { manifest[ch.id] = { chapter: ch, subject: g.subject }; }));
+  localStorage.setItem(CACHE_KEY_MANIFEST, JSON.stringify(manifest));
+};
+
+// ─── Rebuild groups from hv_dl_* keys + manifest when fully offline ───────────
+// This is what shows downloaded files even without Supabase connectivity
+const buildGroupsFromLocal = (): SubjectGroup[] => {
+  const manifest = loadManifest();
+  const localPaths = loadLocalPaths();
+  // Find all chapter IDs that have a local file saved
+  const downloadedIds = Object.keys(localStorage)
+    .filter(k => k.startsWith(DL_PREFIX))
+    .map(k => k.replace(DL_PREFIX, ""))
+    .filter(id => manifest[id]); // only ones we have metadata for
+  if (downloadedIds.length === 0) return [];
+  // Group by subject
+  const subjectMap = new Map<string, SubjectGroup>();
+  downloadedIds.forEach(chId => {
+    const { chapter, subject } = manifest[chId];
+    if (!subjectMap.has(subject.id)) {
+      subjectMap.set(subject.id, { subject, chapters: [], downloadedChapterIds: new Set(), localPaths });
+    }
+    const g = subjectMap.get(subject.id)!;
+    if (!g.chapters.find(c => c.id === chId)) g.chapters.push(chapter);
+    g.downloadedChapterIds.add(chId);
+  });
+  return Array.from(subjectMap.values());
+};
+
 // ─── Load cache synchronously — always returns arrays, never throws ───────────
 const loadCachedGroups = (): SubjectGroup[] => {
   try {
     const raw = localStorage.getItem(CACHE_KEY_DOWNLOADS);
-    if (!raw) return [];
+    if (!raw) return buildGroupsFromLocal(); // fallback: rebuild from local files
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed) || parsed.length === 0) return buildGroupsFromLocal();
     return parsed.map((g: any) => ({
       ...g,
       downloadedChapterIds: new Set<string>(
@@ -76,7 +115,7 @@ const loadCachedGroups = (): SubjectGroup[] => {
       localPaths: g.localPaths || {},
     }));
   } catch {
-    return [];
+    return buildGroupsFromLocal();
   }
 };
 
@@ -191,6 +230,8 @@ const Downloads = () => {
         downloadedChapterIds: Array.from(g.downloadedChapterIds),
       }));
       localStorage.setItem(CACHE_KEY_DOWNLOADS, JSON.stringify(cacheable));
+      // Save manifest so offline can reconstruct groups from hv_dl_* keys alone
+      saveManifest(result);
 
       // Fetch bookmarks
       const { data: bm, error: bmError } = await supabase
