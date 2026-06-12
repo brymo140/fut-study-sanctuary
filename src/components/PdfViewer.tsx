@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
+import { X, Loader2, BookOpen, RefreshCw, ZoomIn, ZoomOut, Bot } from "lucide-react";
 import { AdSession } from "@/lib/adSession";
 import { showInterstitial, isNativePlatform } from "@/lib/admob";
+import { AITutor } from "@/components/AITutor";
 
 interface Props {
   open: boolean;
@@ -76,6 +77,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
   // visualScale drives the instant CSS transform during the gesture
   const [renderScale, setRenderScale] = useState(1.0);
   const [visualScale, setVisualScale] = useState(1.0);
+  const [aiOpen, setAiOpen] = useState(false);
 
   // ── Pinch gesture tracking — all in refs so no re-render during gesture ──────
   // liveScale: the scale accumulating during the pinch, stored in a ref so
@@ -293,6 +295,15 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
                 <RefreshCw className="h-4 w-4 text-muted-foreground" />
               </button>
             )}
+            {/* AI Tutor button — available while reading */}
+            <button
+              onClick={() => setAiOpen(true)}
+              className="h-9 w-9 rounded-lg flex items-center justify-center hover:bg-surface-elevated"
+              aria-label="Ask AI Tutor"
+              title="Ask AI Tutor"
+            >
+              <Bot className="h-5 w-5 text-primary" />
+            </button>
             <button onClick={() => onOpenChange(false)} className="h-9 w-9 rounded-lg flex items-center justify-center hover:bg-surface-elevated">
               <X className="h-5 w-5" />
             </button>
@@ -373,6 +384,11 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           )}
         </div>
       </DialogContent>
+      {/* AI Tutor rendered inside the PDF viewer context so it overlays
+          the PDF without needing to close it. The AITutor component manages
+          its own open/close state — we pass externalOpen to control it from
+          the header Bot button */}
+      {open && <AITutor externalOpen={aiOpen} onExternalClose={() => setAiOpen(false)} />}
     </Dialog>
   );
 };
