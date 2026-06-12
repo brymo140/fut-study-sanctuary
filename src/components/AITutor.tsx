@@ -35,8 +35,24 @@ const fileToDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-export const AITutor = () => {
+export const AITutor = ({
+  externalOpen,
+  onExternalClose,
+}: {
+  externalOpen?: boolean;
+  onExternalClose?: () => void;
+} = {}) => {
   const [open, setOpen] = useState(false);
+
+  // When PdfViewer triggers externalOpen, open the panel
+  useEffect(() => {
+    if (externalOpen) setOpen(true);
+  }, [externalOpen]);
+
+  const handleClose = () => {
+    setOpen(false);
+    onExternalClose?.();
+  };
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -191,13 +207,13 @@ export const AITutor = () => {
         data-onboarding="ai-tutor"
         aria-label="Open AI study assistant"
         style={{ bottom: "calc(var(--bottom-chrome) + 12px)" }}
-        className="fixed right-4 z-40 h-14 w-14 rounded-full bg-gradient-brand shadow-glow flex items-center justify-center transition-transform hover:scale-110 animate-pulse-glow"
+        className={`fixed right-4 z-40 h-14 w-14 rounded-full bg-gradient-brand shadow-glow flex items-center justify-center transition-transform hover:scale-110 animate-pulse-glow ${externalOpen !== undefined ? 'hidden' : ''}`}
       >
         <Bot className="h-6 w-6 text-white" />
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-end" onClick={() => handleClose()}>
           <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
           <div
             className="relative w-full app-shell h-[75vh] mb-16 surface-elevated rounded-t-3xl rounded-b-none border-t border-x flex flex-col animate-slide-up"
@@ -219,7 +235,7 @@ export const AITutor = () => {
                     <Trash2 className="h-4 w-4" />
                   </button>
                 )}
-                <button onClick={() => setOpen(false)} aria-label="Close"
+                <button onClick={() => handleClose()} aria-label="Close"
                   className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center">
                   <X className="h-4 w-4" />
                 </button>
