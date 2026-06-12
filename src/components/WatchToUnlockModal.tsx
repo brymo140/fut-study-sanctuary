@@ -82,7 +82,7 @@ export const WatchToUnlockModal = ({ open, chapterTitle, onClose, onUnlocked }: 
               }}
               className="w-full h-11 rounded-xl font-semibold"
             >
-              📥 Download for Free
+              📥 Download
             </Button>
             <button onClick={onClose} className="text-xs text-muted-foreground">
               Cancel
