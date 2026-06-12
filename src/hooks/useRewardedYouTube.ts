@@ -14,28 +14,48 @@ export const useRewardedYouTubeOpener = () => {
       return;
     }
 
-    // CRITICAL: Open URL FIRST before any await
-    // iOS PWA blocks window.open if called after async operations
-    if (Capacitor.isNativePlatform()) {
-      window.open(url, '_system');
-    } else {
+    // iOS PWA — open immediately, no ad (AdMob doesn't run on PWA)
+    if (!Capacitor.isNativePlatform()) {
       window.open(url, '_blank', 'noopener,noreferrer');
+      if (user) {
+        try {
+          const { data: prof } = await supabase
+            .from("profiles").select("xp").eq("id", user.id).maybeSingle();
+          await supabase
+            .from("profiles").update({ xp: (prof?.xp || 0) + 5 }).eq("id", user.id);
+          refreshProfile();
+          toast.success("+5 XP for watching! 🎥");
+        } catch {}
+      }
+      return;
     }
 
-    // After opening, show ad and grant XP in background
-    if (Capacitor.isNativePlatform()) {
-      showRewardedInterstitial().catch(() => {});
-    }
+    // Android native — show rewarded interstitial BEFORE opening YouTube
+    // so the user actually watches the ad (not in background while YouTube is open)
+    toast.loading("Loading...", { id: "yt-ad" });
+    try {
+      const granted = await showRewardedInterstitial();
+      toast.dismiss("yt-ad");
 
-    if (user) {
-      try {
-        const { data: prof } = await supabase
-          .from("profiles").select("xp").eq("id", user.id).maybeSingle();
-        await supabase
-          .from("profiles").update({ xp: (prof?.xp || 0) + 5 }).eq("id", user.id);
-        refreshProfile();
-        toast.success("+5 XP for watching!");
-      } catch {}
+      // Open YouTube after ad regardless of granted (ad may not fill every time)
+      window.open(url, '_system');
+
+      if (user) {
+        try {
+          const { data: prof } = await supabase
+            .from("profiles").select("xp").eq("id", user.id).maybeSingle();
+          // +10 XP if they watched the ad, +5 XP if no ad was available
+          const xpGain = granted ? 10 : 5;
+          await supabase
+            .from("profiles").update({ xp: (prof?.xp || 0) + xpGain }).eq("id", user.id);
+          refreshProfile();
+          toast.success(granted ? "+10 XP for watching! 🎥" : "+5 XP for watching! 🎥");
+        } catch {}
+      }
+    } catch {
+      toast.dismiss("yt-ad");
+      // If ad throws entirely, still open YouTube
+      window.open(url, '_system');
     }
   };
 };
