@@ -70,9 +70,11 @@ export const initPushNotifications = async (userId: string) => {
 
     PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
       console.log('[Push] Notification tapped');
-      const url = action.notification.data?.url;
-      if (url && window.location.pathname !== url) {
-        window.location.href = url;
+      // Always navigate to the notifications sheet first so the user can
+      // read the full announcement before taking any action.
+      // The sheet already shows attachments, link buttons, and body text.
+      if (window.location.pathname !== '/notifications') {
+        window.location.href = '/notifications';
       }
     });
 
