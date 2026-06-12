@@ -7,6 +7,27 @@ import { SectionHeader, Field, inputClass, TableShell, Th, Td, ActionBtn, EmptyR
 import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
 import { sendPushNotification } from "@/lib/pushNotifications";
 
+// ── Debounced digest push ──────────────────────────────────────────────────────
+// Instead of sending a push for every file upload, we debounce 8 minutes.
+// If more files are uploaded within 8 min, the timer resets and only ONE
+// "new materials available" digest is sent at the end.
+const digestTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const schedulePushDigest = (level: string, department?: string | null) => {
+  const key = `${level}|${department || "all"}`;
+  if (digestTimers.has(key)) clearTimeout(digestTimers.get(key)!);
+  digestTimers.set(key, setTimeout(() => {
+    digestTimers.delete(key);
+    sendPushNotification({
+      target_level: level,
+      target_department: department || null,
+      title: "New materials available! 📚",
+      body: "New study materials have been added to the Vault. Log in to grab yours!",
+      url: "/notifications",
+    });
+  }, 8 * 60 * 1000)); // 8 minutes after last upload
+};
+
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
 interface Subject {
@@ -139,13 +160,7 @@ export const AdminPdfs = () => {
         setStep("list");
         setSinglePdfFile(null);
         setUploadType("modular");
-        sendPushNotification({
-          target_level: subjectForm.level,
-          target_department: subjectForm.department || null,
-          title: "HighVault 📚",
-          body: `New study material added for ${subjectForm.level} students! 📚`,
-          url: `/pdf/${(subj as Subject).id}`,
-        });
+        schedulePushDigest(subjectForm.level, subjectForm.department);
         toast.success("Single PDF uploaded");
       } else {
         setModules([{ module_number: 1, module_title: "", file: null }]);
@@ -206,13 +221,7 @@ export const AdminPdfs = () => {
         file_size_mb: Math.round((totalSize / (1024 * 1024)) * 10) / 10,
       }).eq("id", activeSubject.id));
       if (pdfErr) throw pdfErr;
-      sendPushNotification({
-        target_level: activeSubject.level,
-        target_department: activeSubject.department || null,
-        title: "HighVault 📚",
-        body: `New study material added for ${activeSubject.level} students! 📚`,
-        url: `/pdf/${activeSubject.id}`,
-      });
+      schedulePushDigest(activeSubject.level, activeSubject.department);
 
       toast.success(`Saved ${valid.length} module${valid.length > 1 ? "s" : ""}`);
       setStep("list");
@@ -298,13 +307,7 @@ export const AdminPdfs = () => {
         file_size_mb: Math.round((pastFile.size / (1024 * 1024)) * 10) / 10,
       });
       if (chErr) throw chErr;
-      sendPushNotification({
-        target_level: pastForm.level,
-        target_department: null,
-        title: "HighVault 📚",
-        body: `New past question uploaded for ${pastForm.level}`,
-        url: `/pdf/${pdfRow.id}`,
-      });
+      schedulePushDigest(pastForm.level, null);
       setPastForm({ title: "", course_code: "", level: "100L", year: "", department: "", faculty: "" });
       setPastFile(null);
       toast.success("Past question uploaded");
