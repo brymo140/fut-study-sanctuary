@@ -19,7 +19,7 @@ interface YTChannel {
   level: string | null;
 }
 
-const Home = () => {
+const Home = ({ autoOpenNotifications = false }: { autoOpenNotifications?: boolean }) => {
   const navigate = useNavigate();
   const { profile, user } = useAuth();
   const openYouTube = useRewardedYouTubeOpener();
@@ -27,7 +27,7 @@ const Home = () => {
   const [trending, setTrending] = useState<PdfSummary[]>([]);
   const [recent, setRecent] = useState<PdfSummary[]>([]);
   const [channels, setChannels] = useState<YTChannel[]>([]);
-  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(autoOpenNotifications);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
