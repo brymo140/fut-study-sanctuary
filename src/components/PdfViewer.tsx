@@ -72,24 +72,103 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
   const [totalPages, setTotalPages] = useState(0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
-  // Hybrid zoom — visualScale for instant CSS, renderScale for PDF.js re-render
-  const [visualScale, setVisualScale] = useState(1.0);
+  // renderScale drives PDF.js re-render (only updates when pinch gesture ends)
+  // visualScale drives the instant CSS transform during the gesture
   const [renderScale, setRenderScale] = useState(1.0);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastTouchDistance = useRef<number | null>(null);
+  const [visualScale, setVisualScale] = useState(1.0);
+
+  // ── Pinch gesture tracking — all in refs so no re-render during gesture ──────
+  // liveScale: the scale accumulating during the pinch, stored in a ref so
+  // onTouchMove never triggers React re-renders — smooth 60fps gesture
+  const liveScaleRef = useRef(1.0);
+  const lastTouchDistRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const renderDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // DOM ref to the inner scale div — we mutate style directly for 60fps smoothness
+  const scaleLayerRef = useRef<HTMLDivElement>(null);
 
-  const updateScale = (newScale: number) => {
-    const clamped = Math.min(3, Math.max(0.5, newScale));
-    setVisualScale(clamped);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setRenderScale(clamped), 350);
-  };
+  const clamp = (v: number) => Math.min(3.5, Math.max(0.5, v));
 
-  const getTouchDistance = (t: React.TouchList) => {
+  const getTouchDist = (t: React.TouchList) => {
     const dx = t[0].clientX - t[1].clientX;
     const dy = t[0].clientY - t[1].clientY;
     return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // Apply CSS transform directly to DOM — bypasses React render cycle entirely
+  // This is what makes pinch zoom feel native and smooth (same technique as Google Maps)
+  const applyLiveScale = (scale: number) => {
+    if (!scaleLayerRef.current) return;
+    const cssScale = scale / renderScale;
+    scaleLayerRef.current.style.transform = `scale(${cssScale})`;
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      lastTouchDistRef.current = getTouchDist(e.touches);
+      liveScaleRef.current = visualScale;
+      // Cancel any pending re-render from a previous gesture
+      if (renderDebounceRef.current) clearTimeout(renderDebounceRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length !== 2 || lastTouchDistRef.current === null) return;
+    const newDist = getTouchDist(e.touches);
+    const ratio = newDist / lastTouchDistRef.current;
+    lastTouchDistRef.current = newDist;
+    liveScaleRef.current = clamp(liveScaleRef.current * ratio);
+
+    // Use rAF to throttle DOM mutations to screen refresh rate (60fps)
+    // Never call setState here — that's what caused the jumpy/sluggish behaviour
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      applyLiveScale(liveScaleRef.current);
+    });
+  };
+
+  const handleTouchEnd = () => {
+    if (lastTouchDistRef.current === null) return;
+    lastTouchDistRef.current = null;
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+
+    const finalScale = liveScaleRef.current;
+
+    // Commit to React state — this snaps the CSS transform back to 1
+    // and triggers PDF.js to re-render at the new resolution
+    setVisualScale(finalScale);
+
+    // Debounce PDF.js re-render by 400ms so it only fires once the user
+    // has fully lifted their fingers, not mid-gesture
+    if (renderDebounceRef.current) clearTimeout(renderDebounceRef.current);
+    renderDebounceRef.current = setTimeout(() => {
+      setRenderScale(finalScale);
+    }, 400);
+  };
+
+  // When visualScale changes (from gesture end or zoom buttons),
+  // update the CSS transform on the layer div
+  useEffect(() => {
+    if (scaleLayerRef.current) {
+      const cssScale = visualScale / renderScale;
+      scaleLayerRef.current.style.transform = `scale(${cssScale})`;
+      scaleLayerRef.current.style.transition = 'transform 0.18s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      // Remove transition after it completes so pinch gestures feel instant
+      const t = setTimeout(() => {
+        if (scaleLayerRef.current) scaleLayerRef.current.style.transition = '';
+      }, 200);
+      return () => clearTimeout(t);
+    }
+  }, [visualScale, renderScale]);
+
+  const updateScale = (newScale: number) => {
+    const clamped = clamp(newScale);
+    liveScaleRef.current = clamped;
+    setVisualScale(clamped);
+    if (renderDebounceRef.current) clearTimeout(renderDebounceRef.current);
+    renderDebounceRef.current = setTimeout(() => setRenderScale(clamped), 400);
   };
 
   useEffect(() => {
@@ -110,6 +189,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
       setError(null);
       setVisualScale(1.0);
       setRenderScale(1.0);
+      liveScaleRef.current = 1.0;
       return;
     }
     loadPdf();
@@ -123,27 +203,27 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
   }, [open]);
 
   useEffect(() => {
-  if (!open) return;
-  const timer = setTimeout(async () => {
-    if (AdSession.isInterstitialDue() && isNativePlatform() && navigator.onLine) {
-      AdSession.markInterstitialShown();
-      await showInterstitial();
-    }
-  }, 3 * 60 * 1000);
-  return () => clearTimeout(timer);
-}, [open]);
-  
+    if (!open) return;
+    const timer = setTimeout(async () => {
+      if (AdSession.isInterstitialDue() && isNativePlatform() && navigator.onLine) {
+        AdSession.markInterstitialShown();
+        await showInterstitial();
+      }
+    }, 3 * 60 * 1000);
+    return () => clearTimeout(timer);
+  }, [open]);
+
   const loadPdf = async () => {
     setLoading(true);
     setError(null);
     setPdfDoc(null);
     setVisualScale(1.0);
     setRenderScale(1.0);
+    liveScaleRef.current = 1.0;
 
     try {
       let pdfData: ArrayBuffer | null = null;
 
-      // Check local cache first
       if (chapterId) {
         const cachedFile = localStorage.getItem(`hv_dl_${chapterId}`);
         if (cachedFile && !cachedFile.startsWith('data:')) {
@@ -191,9 +271,6 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     }
     setLoading(false);
   };
-
-  // CSS scale multiplier for instant visual feedback
-  const cssScale = visualScale / renderScale;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -253,29 +330,9 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           className="flex-1 min-h-0 overflow-auto bg-slate-900 select-none p-4"
           onContextMenu={e => e.preventDefault()}
           style={{ WebkitTouchCallout: 'none' } as any}
-          onTouchStart={e => {
-            if (e.touches.length === 2) {
-              lastTouchDistance.current = getTouchDistance(e.touches);
-            }
-          }}
-          onTouchMove={e => {
-            if (e.touches.length === 2 && lastTouchDistance.current !== null) {
-              const newDist = getTouchDistance(e.touches);
-              const ratio = newDist / lastTouchDistance.current;
-              lastTouchDistance.current = newDist;
-              setVisualScale(s => Math.min(3, Math.max(0.5, s * ratio)));
-            }
-          }}
-          onTouchEnd={() => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-            debounceRef.current = setTimeout(() => {
-              setVisualScale(v => {
-                setRenderScale(v);
-                return v;
-              });
-            }, 350);
-            lastTouchDistance.current = null;
-          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
           {loading && (
             <div className="min-h-64 flex flex-col items-center justify-center gap-3">
@@ -295,12 +352,12 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
           )}
 
           {!loading && !error && pdfDoc && (
+            // scaleLayerRef is mutated directly in touch handlers — no React re-renders during gesture
             <div
+              ref={scaleLayerRef}
               className="flex flex-col items-center"
               style={{
-                transform: `scale(${cssScale})`,
                 transformOrigin: 'top center',
-                transition: 'transform 0.08s ease-out',
                 willChange: 'transform',
               }}
             >
