@@ -82,6 +82,7 @@ const App = () => {
                   <Route path="/profile" element={<Protected><Profile /></Protected>} />
                   <Route path="/admin" element={<Protected><Admin /></Protected>} />
                   <Route path="/feedback" element={<Protected><Feedback /></Protected>} />
+                  <Route path="/notifications" element={<Protected><Home autoOpenNotifications /></Protected>} />
 
                   <Route path="*" element={<NotFound />} />
                 </Routes>
