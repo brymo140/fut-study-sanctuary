@@ -15,7 +15,7 @@ interface Props {
   title?: string;
 }
 
-
+// ─── Single page renderer ─────────────────────────────────────────────────────
 const PdfPage = ({
   pdfDoc,
   pageNum,
@@ -43,7 +43,7 @@ const PdfPage = ({
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      
+      // Base width = full screen width, then multiply by renderScale
       const containerWidth = window.innerWidth;
       const baseViewport = page.getViewport({ scale: 1 });
       const finalScale = (containerWidth / baseViewport.width) * renderScale;
@@ -70,7 +70,7 @@ const PdfPage = ({
   );
 };
 
-
+// ─── Main component ───────────────────────────────────────────────────────────
 export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }: Props) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,18 +80,18 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
   const [aiOpen, setAiOpen] = useState(false);
   const [pdfText, setPdfText] = useState<string | null>(null);
 
-  
+  // renderScale triggers PDF.js re-render at new resolution (only on gesture end)
   const [renderScale, setRenderScale] = useState(1.0);
 
- 
-  const liveScaleRef = useRef(1.0);         
-  const renderScaleRef = useRef(1.0);         
+  // ── Pinch zoom — all gesture tracking in refs, zero React renders mid-gesture ─
+  const liveScaleRef = useRef(1.0);          // scale accumulating during pinch
+  const renderScaleRef = useRef(1.0);         // mirrors renderScale state for use in handlers
   const lastTouchDistRef = useRef<number | null>(null);
   const lastPinchCenterRef = useRef<{ x: number; y: number } | null>(null);
   const rafRef = useRef<number | null>(null);
   const renderDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const innerContentRef = useRef<HTMLDivElement>(null);  
+  const innerContentRef = useRef<HTMLDivElement>(null);  // the div we resize to enable real scroll
 
   const clamp = (v: number) => Math.min(4.0, Math.max(0.75, v));
 
@@ -106,12 +106,18 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     y: (t[0].clientY + t[1].clientY) / 2,
   });
 
+  // Apply scale by resizing the inner content div — this is the KEY difference
+  // from using CSS transform: the scroll container sees the real size, so
+  // overflow scrolling in all directions works naturally after zoom.
   const applyScaleToLayout = useCallback((scale: number) => {
     if (!innerContentRef.current) return;
- 
+    // Scale the content by adjusting its width and letting height flow naturally.
+    // At scale 1 it fits the viewport width; at scale 2 it's 2x wide, triggering
+    // horizontal scroll. PDF pages inside re-render at renderScale for sharpness.
     const baseWidth = window.innerWidth;
     innerContentRef.current.style.width = `${baseWidth * scale}px`;
     innerContentRef.current.style.transformOrigin = "top left";
+    // No CSS transform — layout reflow gives us real scrollable area
   }, []);
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -148,6 +154,8 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     const finalScale = liveScaleRef.current;
     applyScaleToLayout(finalScale);
 
+    // Debounce PDF.js re-render — fires 350ms after fingers lift
+    // This re-renders all pages at the new resolution for crispness
     if (renderDebounceRef.current) clearTimeout(renderDebounceRef.current);
     renderDebounceRef.current = setTimeout(() => {
       renderScaleRef.current = finalScale;
@@ -155,10 +163,12 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     }, 350);
   }, [applyScaleToLayout]);
 
+  // Zoom button handler — smooth animated resize
   const updateScale = (newScale: number) => {
     const s = clamp(newScale);
     liveScaleRef.current = s;
 
+    // Animate the width change with a CSS transition on the inner div
     if (innerContentRef.current) {
       innerContentRef.current.style.transition = "width 0.2s cubic-bezier(0.25,0.46,0.45,0.94)";
       applyScaleToLayout(s);
@@ -174,6 +184,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     }, 350);
   };
 
+  // Reset layout on scale reset
   const resetScale = () => {
     updateScale(1.0);
     // Scroll back to left/top after reset
@@ -184,6 +195,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     }, 250);
   };
 
+  // ── Network listeners ─────────────────────────────────────────────────────
   useEffect(() => {
     const on = () => setIsOffline(false);
     const off = () => setIsOffline(true);
@@ -192,7 +204,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
 
- 
+  // ── Open / close ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!open) {
       setPdfDoc(null);
@@ -207,11 +219,12 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
       document.body.classList.remove("pdf-viewer-open");
       return;
     }
+    // Allow horizontal scroll while PDF is open
     document.body.classList.add("pdf-viewer-open");
     loadPdf();
   }, [open, storagePath, chapterId]);
 
- 
+  // Block context menu (right-click / long press) while open
   useEffect(() => {
     if (!open) return;
     const block = (e: Event) => e.preventDefault();
@@ -219,7 +232,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     return () => document.removeEventListener("contextmenu", block);
   }, [open]);
 
-  
+  // Interstitial ad timer while reading
   useEffect(() => {
     if (!open) return;
     const timer = setTimeout(async () => {
@@ -231,7 +244,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     return () => clearTimeout(timer);
   }, [open]);
 
-  
+  // ── PDF load ──────────────────────────────────────────────────────────────
   const loadPdf = async () => {
     setLoading(true);
     setError(null);
@@ -287,7 +300,8 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
       setPdfDoc(pdf);
       setTotalPages(pdf.numPages);
 
-    
+      // Extract text from first 5 pages for AI context
+      // Runs in background — doesn't block PDF rendering
       ;(async () => {
         try {
           const maxPages = Math.min(5, pdf.numPages);
@@ -311,13 +325,23 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     setLoading(false);
   };
 
-  
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           className="max-w-none w-screen h-screen sm:rounded-none p-0 bg-background border-0 [&>button]:hidden flex flex-col"
           style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+          // ── Fix: AI Tutor closing the whole PDF viewer ──────────────────────
+          // The AI Tutor renders in a React portal directly into document.body,
+          // which is OUTSIDE this Dialog's own DOM tree. Radix's Dialog treats
+          // any click/focus outside its tree as "click outside" and closes
+          // itself — that's why typing in the AI Tutor input or tapping its
+          // close button was closing the entire PDF instead of just the tutor.
+          // While the AI Tutor is open, we tell Radix to ignore those events.
+          onPointerDownOutside={(e) => { if (aiOpen) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (aiOpen) e.preventDefault(); }}
+          onFocusOutside={(e) => { if (aiOpen) e.preventDefault(); }}
         >
           {/* ── Header ── */}
           <div
@@ -348,7 +372,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
             </div>
           </div>
 
-          
+          {/* ── Zoom toolbar ── */}
           {!loading && !error && pdfDoc && totalPages > 0 && (
             <div className="flex items-center justify-center gap-3 py-2 bg-surface border-b border-border shrink-0">
               <button
@@ -376,7 +400,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
             </div>
           )}
 
-          
+          {/* ── Scroll container — overflow in ALL directions ── */}
           <div
             ref={scrollContainerRef}
             className="flex-1 min-h-0 overflow-auto bg-slate-900 select-none"
@@ -430,7 +454,6 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
         </DialogContent>
       </Dialog>
 
-      
       {open && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 200, pointerEvents: aiOpen ? "auto" : "none" }}>
           <AITutor externalOpen={aiOpen} onExternalClose={() => setAiOpen(false)} pdfContext={pdfText} pdfTitle={title} />
