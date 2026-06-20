@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Trash2, Pencil, Check, X, Upload, Plus, BookOpen, ArrowLeft } from "lucide-react";
+import { Trash2, Pencil, Check, X, Upload, Plus, BookOpen, ArrowLeft, FolderOpen } from "lucide-react";
 import { SectionHeader, Field, inputClass, TableShell, Th, Td, ActionBtn, EmptyRow } from "./ui";
-import { getDatabaseErrorMessage, withSchemaRetry } from "@/lib/supabaseRetry";
+import { DriveImport } from "./DriveImport";
 import { sendPushNotification } from "@/lib/pushNotifications";
 
 // ── Debounced digest push ──────────────────────────────────────────────────────
@@ -67,6 +67,8 @@ export const AdminPdfs = () => {
 
   const [step, setStep] = useState<Step>("list");
   const [activeSubject, setActiveSubject] = useState<Subject | null>(null);
+  // Controls whether the "Import from Drive" panel is expanded on the list view
+  const [showDriveImport, setShowDriveImport] = useState(false);
 
   const emptySubject = {
     title: "",
@@ -453,15 +455,34 @@ export const AdminPdfs = () => {
       <SectionHeader
         title="Subjects & Modules"
         subtitle="Create subjects, then upload modules under each"
-        right={
-          <button
-            onClick={() => { setSubjectForm(emptySubject); setCoverFile(null); setStep("subject"); }}
-            className="inline-flex items-center gap-1.5 bg-gradient-button border border-primary/40 text-primary text-xs font-semibold rounded-lg px-3 py-2"
-          >
-            <Upload className="h-3.5 w-3.5" /> New Subject
-          </button>
-        }
       />
+
+      {/* ── Two entry paths: manual upload vs Drive import ── */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => { setSubjectForm(emptySubject); setCoverFile(null); setStep("subject"); }}
+          className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl border border-primary/40 bg-gradient-button text-primary"
+        >
+          <Upload className="h-6 w-6" />
+          <span className="text-sm font-semibold">New Subject</span>
+          <span className="text-[10px] text-primary/70">Upload files manually</span>
+        </button>
+        <button
+          onClick={() => setShowDriveImport(v => !v)}
+          className={`flex flex-col items-center justify-center gap-2 py-5 rounded-2xl border transition-colors ${
+            showDriveImport
+              ? "border-blue-500/50 bg-blue-500/10 text-blue-400"
+              : "border-border bg-surface-elevated text-muted-foreground"
+          }`}
+        >
+          <FolderOpen className="h-6 w-6" />
+          <span className="text-sm font-semibold">Import from Drive</span>
+          <span className="text-[10px] opacity-70">Paste a Google Drive link</span>
+        </button>
+      </div>
+
+      {/* Drive import panel — only mounted when the rep chooses this path */}
+      {showDriveImport && <DriveImport />}
       <div className="flex gap-2 surface-card p-1 rounded-xl">
         <button
           onClick={() => setAdminTab("subjects")}
