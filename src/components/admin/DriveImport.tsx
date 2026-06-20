@@ -12,7 +12,7 @@ import {
 const DRIVE_API_KEY = import.meta.env.VITE_GOOGLE_DRIVE_API_KEY as string;
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface DriveFile {
   id: string;
   name: string;
