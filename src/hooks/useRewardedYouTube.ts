@@ -31,10 +31,17 @@ export const useRewardedYouTubeOpener = () => {
     }
 
     // Android native — show rewarded interstitial BEFORE opening YouTube
-    // so the user actually watches the ad (not in background while YouTube is open)
-    toast.loading("Loading...", { id: "yt-ad" });
+    // so the user actually watches the ad (not in background while YouTube is open).
+    // Hard 5-second cap: if no ad fills in time, we stop waiting and continue
+    // to YouTube silently rather than leaving the loading spinner stuck.
+    toast.loading("Loading ad...", { id: "yt-ad" });
+
+    const adTimeout = new Promise<boolean>((resolve) =>
+      setTimeout(() => resolve(false), 5000)
+    );
+
     try {
-      const granted = await showRewardedInterstitial();
+      const granted = await Promise.race([showRewardedInterstitial(), adTimeout]);
       toast.dismiss("yt-ad");
 
       // Open YouTube after ad regardless of granted (ad may not fill every time)
