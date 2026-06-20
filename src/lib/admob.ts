@@ -77,16 +77,38 @@ export const preloadRewardedInterstitial = async () => {
   } catch { rewardedInterstitialReady = false; }
 };
 
+// Wraps a promise with a timeout — if the ad SDK never resolves (no fill,
+// network stall, etc.), we give up after `ms` and treat it as "no ad available"
+// instead of hanging the UI forever.
+const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then((result) => { clearTimeout(timer); resolve(result); })
+           .catch(() => { clearTimeout(timer); resolve(fallback); });
+  });
+};
+
 export const showRewardedInterstitial = async (): Promise<boolean> => {
   if (!isOnline()) return false;
   if (!isNative()) return true;
   await initAdMob();
   try {
     if (!rewardedInterstitialReady) {
-      await AdMob.prepareRewardedInterstitialAd({ adId: AD_UNITS.rewardedInterstitial, isTesting: false });
+      // Cap the prepare step at 4s — if Drive/AdMob is slow to fill, don't block
+      await withTimeout(
+        AdMob.prepareRewardedInterstitialAd({ adId: AD_UNITS.rewardedInterstitial, isTesting: false }),
+        4000,
+        undefined
+      );
     }
     rewardedInterstitialReady = false;
-    const result: AdMobRewardItem = await AdMob.showRewardedInterstitialAd();
+    // Cap the actual ad display at 5s total wait before giving up and
+    // letting the user continue to YouTube without the ad
+    const result = await withTimeout(
+      AdMob.showRewardedInterstitialAd(),
+      5000,
+      null
+    );
     // Preload next one in background
     preloadRewardedInterstitial();
     return !!result;
