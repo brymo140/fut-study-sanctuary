@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -12,6 +12,20 @@ import { MaintenanceGate } from "@/components/MaintenanceGate";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SplashLoader } from "@/components/SplashLoader";
+
+
+const PushNavigator = () => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const path = (e as CustomEvent).detail?.path;
+      if (path) navigate(path);
+    };
+    window.addEventListener('hv:navigate', handler);
+    return () => window.removeEventListener('hv:navigate', handler);
+  }, [navigate]);
+  return null;
+};
 
 import Welcome from "./pages/Welcome";
 import Signup from "./pages/Signup";
@@ -63,6 +77,7 @@ const App = () => {
           <Sonner theme="dark" position="top-center" offset="60px" />
           <OfflineBanner />
           <BrowserRouter>
+            <PushNavigator />
             <AuthProvider>
               <SettingsProvider>
                 <Routes>
