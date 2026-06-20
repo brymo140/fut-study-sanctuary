@@ -94,7 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     setProfile(normalizedProfile);
 
-    // ── Streak warning / reset ──────────────────────────────────────────
+
     if (profileData?.last_active) {
       const lastActive = new Date(profileData.last_active);
       const now = new Date();
@@ -104,18 +104,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (daysSinceActive === 2) {
         const { Capacitor } = await import("@capacitor/core");
-        if (Capacitor.isNativePlatform()) {
-          // Android — push notification
-          sendPushNotification({
-            title: "🐝 Streak at risk!",
-            body: "You haven't visited HighVault in 2 days. Your streak resets tomorrow!",
-            user_ids: [uid],
-            url: "/",
-          }).catch(() => {});
-        } else {
-          // iPhone PWA — in-app toast
+        if (!Capacitor.isNativePlatform()) {
+          // iPhone PWA — in-app toast only (Android gets this via the cron push)
           setTimeout(() => {
-            toast.warning("⚠️ Your reading streak resets tomorrow! Come back daily 🐝");
+            toast.warning(" Your reading streak resets tomorrow! Come back daily ");
           }, 3000);
         }
       } else if (daysSinceActive >= 3) {
@@ -125,29 +117,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (normalizedProfile) normalizedProfile.streak = 0;
 
         const { Capacitor } = await import("@capacitor/core");
-        if (Capacitor.isNativePlatform()) {
-          // Android — push notification
-          sendPushNotification({
-            title: "🔄 Streak Reset",
-            body: "Your HighVault reading streak has been reset. Open the app to start fresh!",
-            user_ids: [uid],
-            url: "/",
-          }).catch(() => {});
-        } else {
-          // iPhone — in-app toast
+        if (!Capacitor.isNativePlatform()) {
+          // iPhone — in-app toast only
           setTimeout(() => {
-            toast("🔄 Your reading streak was reset. Start fresh today!");
+            toast("Your reading streak was reset. Start fresh today!");
           }, 2000);
         }
       }
-    } // ── end streak block ──────────────────────────────────────────────
-
-    // Init push notifications after app is loaded
+    } 
+    
     setTimeout(() => {
       initPushNotifications(uid);
     }, 2500);
 
-    // ── Role resolution ────────────────────────────────────────────────
     let admin = !!roles?.some((r) => r.role === "admin");
     const rep = !!roles?.some((r) => r.role === "rep");
 
@@ -215,7 +197,7 @@ const newStreak = daysSinceLast <= 1
       }
     });
 
-    // If offline, check localStorage for existing session immediately
+
     if (!navigator.onLine) {
       const hasSession = Object.keys(localStorage).some(
         (k) => k.includes("sb-") && k.includes("-auth-token")
@@ -276,7 +258,7 @@ const newStreak = daysSinceLast <= 1
       {children}
     </AuthContext.Provider>
   );
-}; // ── end AuthProvider ──────────────────────────────────────────────
+};
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
