@@ -12,6 +12,7 @@ import {
 const DRIVE_API_KEY = import.meta.env.VITE_GOOGLE_DRIVE_API_KEY as string;
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface DriveFile {
   id: string;
   name: string;
@@ -24,6 +25,7 @@ interface DriveFolder {
   name: string;
 }
 
+// One ImportGroup = one pdfs row + N chapters
 interface ImportGroup {
   folderId: string | null;
   folderName: string;
@@ -40,6 +42,7 @@ type DriveTarget =
   | { kind: "folder"; id: string }
   | null;
 
+// ─── Drive link parser ────────────────────────────────────────────────────────
 const parseDriveLink = (url: string): DriveTarget => {
   try {
     const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
@@ -52,6 +55,7 @@ const parseDriveLink = (url: string): DriveTarget => {
   return null;
 };
 
+// ─── Drive API helpers (listing only — no file downloads from browser) ────────
 const driveGetFile = async (fileId: string): Promise<DriveFile | null> => {
   const resp = await fetch(
     `https://www.googleapis.com/drive/v3/files/${fileId}?key=${DRIVE_API_KEY}&fields=id,name,size,mimeType`
@@ -99,6 +103,7 @@ const formatSize = (bytes?: string) => {
 const cleanTitle = (name: string) =>
   name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim();
 
+// Detect if a folder name or filename suggests it contains past questions
 const detectsPastQuestion = (name: string): boolean => {
   const lower = name.toLowerCase();
   return (
@@ -114,6 +119,9 @@ const detectsPastQuestion = (name: string): boolean => {
   );
 };
 
+// ─── Call the Edge Function to import one group ───────────────────────────────
+// The Edge Function downloads files from Drive server-side and uploads to Supabase.
+// It processes files one by one and returns per-file results.
 const importGroupViaEdgeFunction = async (
   pdfId: string,
   files: DriveFile[],
@@ -121,6 +129,7 @@ const importGroupViaEdgeFunction = async (
   onFileComplete: (fileName: string, success: boolean, error?: string) => void
 ): Promise<{ success: number; failed: number }> => {
 
+  // Call edge function with all files — it handles them sequentially server-side
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) throw new Error("Not authenticated");
@@ -149,6 +158,7 @@ const importGroupViaEdgeFunction = async (
 
   const result = await response.json();
 
+  // Report per-file results back to the UI
   if (Array.isArray(result.results)) {
     for (const r of result.results) {
       onFileComplete(r.name, r.success, r.error);
@@ -158,9 +168,13 @@ const importGroupViaEdgeFunction = async (
   return { success: result.success || 0, failed: result.failed || 0 };
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export const DriveImport = () => {
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  // Defaults to open — the parent (AdminPdfs) only mounts this component
+  // when the rep explicitly chose "Import from Drive", so no need for a
+  // second collapse/expand step here.
+  const [open, setOpen] = useState(true);
   const [link, setLink] = useState("");
   const [fetching, setFetching] = useState(false);
   const [mode, setMode] = useState<"flat" | "grouped">("flat");
@@ -169,6 +183,7 @@ export const DriveImport = () => {
   const [importing, setImporting] = useState(false);
   const [defaultLevel, setDefaultLevel] = useState("100L");
 
+  // Per-file status for the review/progress panel
   const [fileStatus, setFileStatus] = useState<Record<string, "pending" | "done" | "failed">>({});
   const [currentFile, setCurrentFile] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<{ success: number; failed: number } | null>(null);
@@ -239,6 +254,7 @@ export const DriveImport = () => {
 
           const newGroups: ImportGroup[] = [];
 
+          // Root-level PDFs as their own group if any
           if (directPdfs.length > 0) {
             newGroups.push({
               folderId: target.id,
@@ -330,6 +346,7 @@ export const DriveImport = () => {
     let totalFailed = 0;
 
     for (const group of activeGroups) {
+      // Create the pdfs row first (browser → Supabase directly, no CORS issue)
       const { data: pdfRow, error: pdfErr } = await supabase
         .from("pdfs")
         .insert({
@@ -352,6 +369,7 @@ export const DriveImport = () => {
 
       if (pdfErr) {
         toast.error(`Could not create subject "${group.subjectTitle}": ${pdfErr.message}`);
+        // Mark all files in this group as failed
         const failIds = Array.from(group.selectedIds);
         setFileStatus(prev => {
           const next = { ...prev };
@@ -365,11 +383,13 @@ export const DriveImport = () => {
       const selectedFiles = group.files.filter(f => group.selectedIds.has(f.id));
 
       try {
+        // Hand off to Edge Function — it does the Drive download + Storage upload
         const { success, failed } = await importGroupViaEdgeFunction(
           pdfRow.id,
           selectedFiles,
           1,
           (fileName, success, error) => {
+            // Find the file ID for this name to update status
             const file = selectedFiles.find(f => f.name === fileName);
             if (file) {
               setCurrentFile(success ? null : fileName);
@@ -382,6 +402,7 @@ export const DriveImport = () => {
         totalFailed += failed;
 
         if (success === 0) {
+          // Nothing imported — clean up the empty pdfs row
           await supabase.from("pdfs").delete().eq("id", pdfRow.id);
         }
       } catch (e: any) {
