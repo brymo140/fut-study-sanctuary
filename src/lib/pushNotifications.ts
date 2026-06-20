@@ -70,12 +70,10 @@ export const initPushNotifications = async (userId: string) => {
 
     PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
       console.log('[Push] Notification tapped');
-      // Always navigate to the notifications sheet first so the user can
-      // read the full announcement before taking any action.
-      // The sheet already shows attachments, link buttons, and body text.
-      if (window.location.pathname !== '/notifications') {
-        window.location.href = '/notifications';
-      }
+      // Use a custom event so React Router handles navigation without a full
+      // page reload — window.location.href causes iOS PWA to lose its state
+      // and can exit standalone mode entirely.
+      window.dispatchEvent(new CustomEvent('hv:navigate', { detail: { path: '/notifications' } }));
     });
 
   } catch (e) {
