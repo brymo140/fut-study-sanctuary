@@ -12,7 +12,6 @@ import {
 const DRIVE_API_KEY = import.meta.env.VITE_GOOGLE_DRIVE_API_KEY as string;
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
-
 interface DriveFile {
   id: string;
   name: string;
@@ -25,24 +24,24 @@ interface DriveFolder {
   name: string;
 }
 
-// One ImportGroup = one pdfs row + N chapters
 interface ImportGroup {
   folderId: string | null;
   folderName: string;
   files: DriveFile[];
   selectedIds: Set<string>;
-  subjectTitle: string;
-  courseCode: string;
+  subjectTitle: string;   
+  courseCode: string;     
   level: string;
   enabled: boolean;
+  isPastQuestion: boolean;
+  isRelated: boolean;
+  fileMetadata: Record<string, { title: string; courseCode: string }>;
 }
 
 type DriveTarget =
   | { kind: "file"; id: string }
   | { kind: "folder"; id: string }
   | null;
-
-// ─── Drive link parser ────────────────────────────────────────────────────────
 const parseDriveLink = (url: string): DriveTarget => {
   try {
     const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
@@ -55,7 +54,6 @@ const parseDriveLink = (url: string): DriveTarget => {
   return null;
 };
 
-// ─── Drive API helpers (listing only — no file downloads from browser) ────────
 const driveGetFile = async (fileId: string): Promise<DriveFile | null> => {
   const resp = await fetch(
     `https://www.googleapis.com/drive/v3/files/${fileId}?key=${DRIVE_API_KEY}&fields=id,name,size,mimeType`
@@ -101,7 +99,55 @@ const formatSize = (bytes?: string) => {
 };
 
 const cleanTitle = (name: string) =>
-  name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim();
+  name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").replace(/\s{2,}/g, " ").trim();
+
+const COURSE_CODE_PATTERN = /\b([A-Za-z]{2,4})[\s_-]?(\d{2,4})\b/;
+
+// Extract BOTH the course code AND a clean title from one filename, e.g.:
+//   "BIO 102 COMPLIED NOTE BY BAN.pdf"
+//     → courseCode: "BIO102", title: "COMPLIED NOTE BY BAN"
+//   "GST112 Compiled By Ban Crisz.pdf"
+//     → courseCode: "GST112", title: "Compiled By Ban Crisz"
+//   "Random_Lecture_Slides.pdf" (no course code pattern found)
+//     → courseCode: "", title: "Random Lecture Slides"
+const extractTitleAndCode = (rawName: string): { title: string; courseCode: string } => {
+  const cleaned = cleanTitle(rawName);
+  const match = cleaned.match(COURSE_CODE_PATTERN);
+
+  if (!match) {
+    return { title: cleaned, courseCode: "" };
+  }
+
+  const courseCode = `${match[1].toUpperCase()}${match[2]}`;
+
+  // Remove the matched course code text from the title, then trim any
+  // leftover connector words/punctuation at the boundary (e.g. "by", "-", ":")
+  const titleWithoutCode = cleaned
+    .slice(0, match.index) + cleaned.slice((match.index ?? 0) + match[0].length);
+
+  const title = titleWithoutCode
+    .replace(/^[\s,:.\-]+/, "")   // leading leftover punctuation/space
+    .replace(/[\s,:.\-]+$/, "")   // trailing leftover punctuation/space
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return {
+    courseCode,
+    // If stripping the course code leaves nothing useful, fall back to the full cleaned name
+    title: title.length >= 3 ? title : cleaned,
+  };
+};
+
+// Build the initial per-file metadata map for unrelated/standalone mode.
+// Each file gets its own guessed title + course code (course code stripped
+// out of the title so they don't duplicate each other), fully editable later.
+const buildFileMetadata = (files: DriveFile[]): Record<string, { title: string; courseCode: string }> => {
+  const map: Record<string, { title: string; courseCode: string }> = {};
+  for (const f of files) {
+    map[f.id] = extractTitleAndCode(f.name);
+  }
+  return map;
+};
 
 // Detect if a folder name or filename suggests it contains past questions
 const detectsPastQuestion = (name: string): boolean => {
@@ -214,6 +260,8 @@ export const DriveImport = () => {
           level: defaultLevel,
           enabled: true,
           isPastQuestion: detectsPastQuestion(file.name),
+          isRelated: true, // single file — naturally one subject
+          fileMetadata: buildFileMetadata([file]),
         }]);
 
       } else {
@@ -236,6 +284,12 @@ export const DriveImport = () => {
             courseCode: "",
             level: defaultLevel,
             enabled: true,
+            isPastQuestion: false,
+            // Default to "not related" — a flat folder full of PDFs is more often
+            // a mixed bag of unrelated materials than one course's chapters.
+            // The rep can flip this toggle if they ARE all one subject.
+            isRelated: false,
+            fileMetadata: buildFileMetadata(directPdfs),
           }]);
         } else {
           // Multi-subfolder structure
@@ -266,6 +320,8 @@ export const DriveImport = () => {
               level: defaultLevel,
               enabled: true,
               isPastQuestion: false,
+              isRelated: false, // root-level loose files — likely unrelated
+              fileMetadata: buildFileMetadata(directPdfs),
             });
           }
 
@@ -280,6 +336,10 @@ export const DriveImport = () => {
               courseCode: "",
               level: defaultLevel,
               enabled: true,
+              isPastQuestion: detectsPastQuestion(folder.name),
+              // A named subfolder usually IS one subject's chapters (e.g. "MTH201/")
+              isRelated: true,
+              fileMetadata: buildFileMetadata(files),
             });
           }
 
@@ -305,6 +365,20 @@ export const DriveImport = () => {
     setGroups(prev => prev.map((g, i) => i === index ? { ...g, ...patch } : g));
   };
 
+  // Update a single file's title or course code (only used in unrelated mode)
+  const updateFileMetadata = (groupIndex: number, fileId: string, patch: Partial<{ title: string; courseCode: string }>) => {
+    setGroups(prev => prev.map((g, i) => {
+      if (i !== groupIndex) return g;
+      return {
+        ...g,
+        fileMetadata: {
+          ...g.fileMetadata,
+          [fileId]: { ...g.fileMetadata[fileId], ...patch },
+        },
+      };
+    }));
+  };
+
   const toggleFile = (groupIndex: number, fileId: string) => {
     setGroups(prev => prev.map((g, i) => {
       if (i !== groupIndex) return g;
@@ -326,16 +400,32 @@ export const DriveImport = () => {
     if (!user) return;
     const activeGroups = groups.filter(g => g.enabled && g.selectedIds.size > 0);
     if (activeGroups.length === 0) { toast.error("No files selected"); return; }
-    const missing = activeGroups.find(g => !g.subjectTitle.trim() || !g.courseCode.trim());
-    if (missing) {
-      toast.error(`Fill Subject Title and Course Code for "${missing.folderName}"`);
+
+    // Validation differs by mode:
+    // - Related (modular): needs ONE shared Subject Title + Course Code for the group
+    // - Unrelated (standalone): EACH selected file needs its OWN title + course code
+    const missingShared = activeGroups.find(g => g.isRelated && (!g.subjectTitle.trim() || !g.courseCode.trim()));
+    if (missingShared) {
+      toast.error(`Fill Subject Title and Course Code for "${missingShared.folderName}"`);
       return;
+    }
+
+    for (const g of activeGroups) {
+      if (g.isRelated) continue;
+      const selectedFiles = g.files.filter(f => g.selectedIds.has(f.id));
+      const incomplete = selectedFiles.find(f => {
+        const meta = g.fileMetadata[f.id];
+        return !meta?.title?.trim() || !meta?.courseCode?.trim();
+      });
+      if (incomplete) {
+        toast.error(`Fill in Title and Course Code for "${incomplete.name}"`);
+        return;
+      }
     }
 
     setImporting(true);
     setImportSummary(null);
 
-    // Initialise all selected files as "pending"
     const initialStatus: Record<string, "pending" | "done" | "failed"> = {};
     for (const g of activeGroups) {
       for (const id of g.selectedIds) initialStatus[id] = "pending";
@@ -346,75 +436,102 @@ export const DriveImport = () => {
     let totalFailed = 0;
 
     for (const group of activeGroups) {
-      // Create the pdfs row first (browser → Supabase directly, no CORS issue)
-      const { data: pdfRow, error: pdfErr } = await supabase
-        .from("pdfs")
-        .insert({
-          title: group.subjectTitle.trim(),
-          course_code: group.courseCode.trim().toUpperCase(),
-          level: group.level as any,
-          department: null,
-          faculty: null,
-          description: null,
-          cover_url: null,
-          tags: [],
-          is_verified: false,
-          is_general: false,
-          is_past_question: group.isPastQuestion,
-          total_chapters: 0,
-          uploader_id: user.id,
-        })
-        .select()
-        .single();
-
-      if (pdfErr) {
-        toast.error(`Could not create subject "${group.subjectTitle}": ${pdfErr.message}`);
-        // Mark all files in this group as failed
-        const failIds = Array.from(group.selectedIds);
-        setFileStatus(prev => {
-          const next = { ...prev };
-          failIds.forEach(id => { next[id] = "failed"; });
-          return next;
-        });
-        totalFailed += failIds.length;
-        continue;
-      }
-
       const selectedFiles = group.files.filter(f => group.selectedIds.has(f.id));
 
-      try {
-        // Hand off to Edge Function — it does the Drive download + Storage upload
-        const { success, failed } = await importGroupViaEdgeFunction(
-          pdfRow.id,
-          selectedFiles,
-          1,
-          (fileName, success, error) => {
-            // Find the file ID for this name to update status
-            const file = selectedFiles.find(f => f.name === fileName);
-            if (file) {
-              setCurrentFile(success ? null : fileName);
-              setFileStatus(prev => ({ ...prev, [file.id]: success ? "done" : "failed" }));
-            }
-            if (error) console.warn(`[DriveImport] ${fileName}: ${error}`);
-          }
-        );
-        totalSuccess += success;
-        totalFailed += failed;
+      if (group.isRelated) {
+        // ── MODULAR MODE: one subject, all selected files become its chapters ──
+        const { data: pdfRow, error: pdfErr } = await supabase
+          .from("pdfs")
+          .insert({
+            title: group.subjectTitle.trim(),
+            course_code: group.courseCode.trim().toUpperCase(),
+            level: group.level as any,
+            department: null, faculty: null, description: null, cover_url: null,
+            tags: [], is_verified: false,
+            is_general: false,           // modular = has multiple named chapters
+            is_past_question: group.isPastQuestion,
+            total_chapters: 0,
+            uploader_id: user.id,
+          })
+          .select().single();
 
-        if (success === 0) {
-          // Nothing imported — clean up the empty pdfs row
+        if (pdfErr) {
+          toast.error(`Could not create subject "${group.subjectTitle}": ${pdfErr.message}`);
+          markFilesFailed(group.selectedIds);
+          totalFailed += group.selectedIds.size;
+          continue;
+        }
+
+        try {
+          const { success, failed } = await importGroupViaEdgeFunction(
+            pdfRow.id, selectedFiles, 1,
+            (fileName, success, error) => {
+              const file = selectedFiles.find(f => f.name === fileName);
+              if (file) {
+                setCurrentFile(success ? null : fileName);
+                setFileStatus(prev => ({ ...prev, [file.id]: success ? "done" : "failed" }));
+              }
+              if (error) console.warn(`[DriveImport] ${fileName}: ${error}`);
+            }
+          );
+          totalSuccess += success;
+          totalFailed += failed;
+          if (success === 0) await supabase.from("pdfs").delete().eq("id", pdfRow.id);
+        } catch (e: any) {
+          toast.error(`"${group.subjectTitle}" failed: ${e.message}`);
+          markFilesFailed(group.selectedIds);
+          totalFailed += group.selectedIds.size;
           await supabase.from("pdfs").delete().eq("id", pdfRow.id);
         }
-      } catch (e: any) {
-        toast.error(`"${group.subjectTitle}" failed: ${e.message}`);
-        const failIds = Array.from(group.selectedIds);
-        setFileStatus(prev => {
-          const next = { ...prev };
-          failIds.forEach(id => { next[id] = "failed"; });
-          return next;
-        });
-        totalFailed += failIds.length;
-        await supabase.from("pdfs").delete().eq("id", pdfRow.id);
+
+      } else {
+        // ── STANDALONE MODE: each file becomes its OWN subject (is_general: true) ──
+        // Title and course code come from each file's OWN metadata — they are
+        // genuinely unrelated files, so neither can share one course code.
+        for (const file of selectedFiles) {
+          setCurrentFile(file.name);
+          const meta = group.fileMetadata[file.id];
+
+          const { data: pdfRow, error: pdfErr } = await supabase
+            .from("pdfs")
+            .insert({
+              title: meta.title.trim(),
+              course_code: meta.courseCode.trim().toUpperCase(),
+              level: group.level as any,
+              department: null, faculty: null, description: null, cover_url: null,
+              tags: [], is_verified: false,
+              is_general: true,            // standalone = single PDF, no chapter list shown
+              is_past_question: group.isPastQuestion,
+              total_chapters: 0,
+              uploader_id: user.id,
+            })
+            .select().single();
+
+          if (pdfErr) {
+            toast.error(`Could not create subject for "${file.name}": ${pdfErr.message}`);
+            setFileStatus(prev => ({ ...prev, [file.id]: "failed" }));
+            totalFailed++;
+            continue;
+          }
+
+          try {
+            const { success, failed } = await importGroupViaEdgeFunction(
+              pdfRow.id, [file], 1,
+              (fileName, success, error) => {
+                setFileStatus(prev => ({ ...prev, [file.id]: success ? "done" : "failed" }));
+                if (error) console.warn(`[DriveImport] ${fileName}: ${error}`);
+              }
+            );
+            totalSuccess += success;
+            totalFailed += failed;
+            if (success === 0) await supabase.from("pdfs").delete().eq("id", pdfRow.id);
+          } catch (e: any) {
+            toast.error(`"${file.name}" failed: ${e.message}`);
+            setFileStatus(prev => ({ ...prev, [file.id]: "failed" }));
+            totalFailed++;
+            await supabase.from("pdfs").delete().eq("id", pdfRow.id);
+          }
+        }
       }
     }
 
@@ -429,6 +546,16 @@ export const DriveImport = () => {
       toast.warning(`${totalFailed} file${totalFailed !== 1 ? "s" : ""} failed — see results below`);
     }
   };
+
+  // Helper: mark a set of file IDs as failed in the status map
+  const markFilesFailed = (ids: Set<string>) => {
+    setFileStatus(prev => {
+      const next = { ...prev };
+      ids.forEach(id => { next[id] = "failed"; });
+      return next;
+    });
+  };
+
 
   const resetAll = () => {
     setLink("");
@@ -597,57 +724,126 @@ export const DriveImport = () => {
                         {group.selectedIds.size === group.files.length ? "Deselect all" : "Select all"}
                       </button>
                     </div>
-                    <div className="max-h-48 overflow-y-auto space-y-0.5 border border-border rounded-lg p-1.5">
+                    <div className="max-h-72 overflow-y-auto space-y-1 border border-border rounded-lg p-1.5">
                       {group.files.map(f => {
                         const status = fileStatus[f.id];
                         const isSel = group.selectedIds.has(f.id);
+                        const meta = group.fileMetadata[f.id];
                         return (
-                          <button
+                          <div
                             key={f.id}
-                            onClick={() => !importing && toggleFile(gi, f.id)}
-                            disabled={importing}
-                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${isSel && !status ? "bg-primary/8" : "hover:bg-surface-elevated"} ${status === "done" ? "opacity-60" : ""}`}
+                            className={`rounded-lg transition-colors ${isSel && !status ? "bg-primary/8" : ""} ${status === "done" ? "opacity-60" : ""}`}
                           >
-                            {/* Status icon */}
-                            {status === "done" && <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />}
-                            {status === "failed" && <X className="h-3.5 w-3.5 text-destructive shrink-0" />}
-                            {status === "pending" && <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />}
-                            {!status && (isSel
-                              ? <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" />
-                              : <Square className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <button
+                              onClick={() => !importing && toggleFile(gi, f.id)}
+                              disabled={importing}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-surface-elevated rounded-lg"
+                            >
+                              {/* Status icon */}
+                              {status === "done" && <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />}
+                              {status === "failed" && <X className="h-3.5 w-3.5 text-destructive shrink-0" />}
+                              {status === "pending" && <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />}
+                              {!status && (isSel
+                                ? <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" />
+                                : <Square className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              )}
+                              <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <span className={`flex-1 text-[11px] font-medium line-clamp-1 ${status === "failed" ? "text-destructive" : ""}`}>
+                                {f.name}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground shrink-0">{formatSize(f.size)}</span>
+                            </button>
+
+                            {/* Per-file Title + Course Code — only in unrelated/standalone mode,
+                                and only for selected files (no point editing a file you won't import) */}
+                            {!group.isRelated && isSel && !status && (
+                              <div className="grid grid-cols-2 gap-1.5 px-2 pb-2 pt-0.5">
+                                <input
+                                  className={`${inputClass} text-foreground text-[11px] py-1.5`}
+                                  value={meta?.title || ""}
+                                  onChange={e => updateFileMetadata(gi, f.id, { title: e.target.value })}
+                                  placeholder="Subject title"
+                                  disabled={importing}
+                                />
+                                <input
+                                  className={`${inputClass} text-foreground text-[11px] py-1.5`}
+                                  value={meta?.courseCode || ""}
+                                  onChange={e => updateFileMetadata(gi, f.id, { courseCode: e.target.value })}
+                                  placeholder="Course code"
+                                  disabled={importing}
+                                />
+                              </div>
                             )}
-                            <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
-                            <span className={`flex-1 text-[11px] font-medium line-clamp-1 ${status === "failed" ? "text-destructive" : ""}`}>
-                              {f.name}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground shrink-0">{formatSize(f.size)}</span>
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
                   </div>
 
-                  {/* Subject metadata */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <Field label="Subject title">
-                      <input
-                        className={`${inputClass} text-foreground text-xs`}
-                        value={group.subjectTitle}
-                        onChange={e => updateGroup(gi, { subjectTitle: e.target.value })}
-                        placeholder="e.g. Engineering Maths"
-                        disabled={importing}
-                      />
-                    </Field>
-                    <Field label="Course code">
-                      <input
-                        className={`${inputClass} text-foreground text-xs`}
-                        value={group.courseCode}
-                        onChange={e => updateGroup(gi, { courseCode: e.target.value })}
-                        placeholder="e.g. MTH201"
-                        disabled={importing}
-                      />
-                    </Field>
-                  </div>
+                  {!group.isRelated && (
+                    <p className="text-[10px] text-amber-500/80 -mt-1 flex items-start gap-1">
+                      <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                      Titles and course codes are guessed from filenames — check each one above before importing.
+                    </p>
+                  )}
+
+                  {/* ── Related vs Standalone toggle ── */}
+                  <button
+                    onClick={() => updateGroup(gi, { isRelated: !group.isRelated })}
+                    disabled={importing}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                      group.isRelated
+                        ? "bg-primary/8 border-primary/30"
+                        : "bg-surface border-border"
+                    }`}
+                  >
+                    {group.isRelated
+                      ? <ToggleRight className="h-5 w-5 text-primary shrink-0" />
+                      : <ToggleLeft className="h-5 w-5 text-muted-foreground shrink-0" />
+                    }
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold">
+                        {group.isRelated ? "These files are related" : "These files are unrelated"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {group.isRelated
+                          ? "Imported as ONE subject with multiple chapters (modular)"
+                          : "Each file becomes its OWN standalone subject"
+                        }
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Subject metadata — only shown in related/modular mode.
+                      In unrelated mode, each file has its OWN title + course
+                      code editable directly in the file list below instead. */}
+                  {group.isRelated && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Subject title">
+                        <input
+                          className={`${inputClass} text-foreground text-xs`}
+                          value={group.subjectTitle}
+                          onChange={e => updateGroup(gi, { subjectTitle: e.target.value })}
+                          placeholder="e.g. Engineering Maths"
+                          disabled={importing}
+                        />
+                      </Field>
+                      <Field label="Course code">
+                        <input
+                          className={`${inputClass} text-foreground text-xs`}
+                          value={group.courseCode}
+                          onChange={e => updateGroup(gi, { courseCode: e.target.value })}
+                          placeholder="e.g. MTH201"
+                          disabled={importing}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                  {!group.isRelated && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Each file below has its own Title and Course Code — edit them individually since these files aren't related.
+                    </p>
+                  )}
                   <Field label="Level">
                     <select
                       className={`${inputClass} text-foreground text-xs`}
