@@ -69,3 +69,21 @@ export const readPdfFromDevice = async (fileName: string): Promise<string | null
     return null;
   }
 };
+
+export const openWithSystemChooser = async (fileName: string): Promise<boolean> => {
+  if (!isNative()) return false;
+  try {
+    const { Filesystem, Directory } = await import("@capacitor/filesystem");
+    const { Share } = await import("@capacitor/share");
+    const safeFileName = safeName(fileName);
+    const stat = await Filesystem.stat({
+      path: `highvault/chapters/${safeFileName}`,
+      directory: Directory.Cache,
+    });
+    await Share.share({ url: stat.uri, dialogTitle: "Open with" });
+    return true;
+  } catch (e) {
+    console.error("[deviceFiles] openWithSystemChooser", e);
+    return false;
+  }
+};
