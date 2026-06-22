@@ -13,6 +13,7 @@ interface Props {
   storagePath: string | null;
   chapterId?: string;
   title?: string;
+  externalFileUri?: string | null;
 }
 
 // ─── Single page renderer ─────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ const PdfPage = ({
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }: Props) => {
+export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title, externalFileUri }: Props) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
@@ -222,7 +223,7 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     // Allow horizontal scroll while PDF is open
     document.body.classList.add("pdf-viewer-open");
     loadPdf();
-  }, [open, storagePath, chapterId]);
+  }, [open, storagePath, chapterId, externalFileUri]);
 
   // Block context menu (right-click / long press) while open
   useEffect(() => {
@@ -258,7 +259,20 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
     try {
       let pdfData: ArrayBuffer | null = null;
 
-      if (chapterId) {
+      if (externalFileUri) {
+        try {
+          const { Filesystem } = await import("@capacitor/filesystem");
+          const result = await Filesystem.readFile({ path: externalFileUri });
+          const resp = await fetch(`data:application/pdf;base64,${result.data}`);
+          pdfData = await resp.arrayBuffer();
+        } catch {
+          setError("Could not open this file.");
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (!pdfData && chapterId) {
         const cachedFile = localStorage.getItem(`hv_dl_${chapterId}`);
         if (cachedFile && !cachedFile.startsWith("data:")) {
           try {
@@ -328,22 +342,14 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={onOpenChange} modal={!aiOpen}>
         <DialogContent
           className="max-w-none w-screen h-screen sm:rounded-none p-0 bg-background border-0 [&>button]:hidden flex flex-col"
           style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
-          // ── Fix: AI Tutor closing the whole PDF viewer ──────────────────────
-          // The AI Tutor renders in a React portal directly into document.body,
-          // which is OUTSIDE this Dialog's own DOM tree. Radix's Dialog treats
-          // any click/focus outside its tree as "click outside" and closes
-          // itself — that's why typing in the AI Tutor input or tapping its
-          // close button was closing the entire PDF instead of just the tutor.
-          // While the AI Tutor is open, we tell Radix to ignore those events.
           onPointerDownOutside={(e) => { if (aiOpen) e.preventDefault(); }}
           onInteractOutside={(e) => { if (aiOpen) e.preventDefault(); }}
-          onFocusOutside={(e) => { if (aiOpen) e.preventDefault(); }}
         >
-          {/* ── Header ── */}
+          {/* Header */}
           <div
             className="flex items-center justify-between px-3 border-b border-border bg-surface shrink-0"
             style={{ paddingTop: "max(10px, env(safe-area-inset-top))", paddingBottom: "10px" }}
@@ -428,6 +434,9 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
             )}
 
             {!loading && !error && pdfDoc && (
+              // innerContentRef is resized directly (not CSS transform) so the
+              // scroll container sees the real wider/taller layout and enables
+              // horizontal + vertical scrolling after zoom — same as native PDF apps
               <div
                 ref={innerContentRef}
                 style={{
@@ -454,6 +463,10 @@ export const PdfViewer = ({ open, onOpenChange, storagePath, chapterId, title }:
         </DialogContent>
       </Dialog>
 
+      {/* AI Tutor portal — rendered at document.body level so it sits ABOVE
+          the Dialog overlay (z-50). We use z-[200] to guarantee it's on top.
+          This is why the Bot button wasn't working before — the Dialog backdrop
+          at z-50 was intercepting all touch/click events on the AITutor panel. */}
       {open && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 200, pointerEvents: aiOpen ? "auto" : "none" }}>
           <AITutor externalOpen={aiOpen} onExternalClose={() => setAiOpen(false)} pdfContext={pdfText} pdfTitle={title} />
