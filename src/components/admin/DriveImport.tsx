@@ -12,6 +12,7 @@ import {
 const DRIVE_API_KEY = import.meta.env.VITE_GOOGLE_DRIVE_API_KEY as string;
 const LEVELS = ["100L", "200L", "300L", "400L", "500L"] as const;
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface DriveFile {
   id: string;
   name: string;
@@ -24,17 +25,20 @@ interface DriveFolder {
   name: string;
 }
 
+// One ImportGroup = one pdfs row + N chapters (when isRelated: true)
+//                or N separate pdfs rows, one per file (when isRelated: false)
 interface ImportGroup {
   folderId: string | null;
   folderName: string;
   files: DriveFile[];
   selectedIds: Set<string>;
-  subjectTitle: string;   
-  courseCode: string;     
+  subjectTitle: string;
+  courseCode: string;
   level: string;
   enabled: boolean;
   isPastQuestion: boolean;
   isRelated: boolean;
+  isVerified: boolean;
   fileMetadata: Record<string, { title: string; courseCode: string }>;
 }
 
@@ -42,6 +46,8 @@ type DriveTarget =
   | { kind: "file"; id: string }
   | { kind: "folder"; id: string }
   | null;
+
+// ─── Drive link parser ────────────────────────────────────────────────────────
 const parseDriveLink = (url: string): DriveTarget => {
   try {
     const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
@@ -54,6 +60,7 @@ const parseDriveLink = (url: string): DriveTarget => {
   return null;
 };
 
+// ─── Drive API helpers (listing only — no file downloads from browser) ────────
 const driveGetFile = async (fileId: string): Promise<DriveFile | null> => {
   const resp = await fetch(
     `https://www.googleapis.com/drive/v3/files/${fileId}?key=${DRIVE_API_KEY}&fields=id,name,size,mimeType`
@@ -103,13 +110,6 @@ const cleanTitle = (name: string) =>
 
 const COURSE_CODE_PATTERN = /\b([A-Za-z]{2,4})[\s_-]?(\d{2,4})\b/;
 
-// Extract BOTH the course code AND a clean title from one filename, e.g.:
-//   "BIO 102 COMPLIED NOTE BY BAN.pdf"
-//     → courseCode: "BIO102", title: "COMPLIED NOTE BY BAN"
-//   "GST112 Compiled By Ban Crisz.pdf"
-//     → courseCode: "GST112", title: "Compiled By Ban Crisz"
-//   "Random_Lecture_Slides.pdf" (no course code pattern found)
-//     → courseCode: "", title: "Random Lecture Slides"
 const extractTitleAndCode = (rawName: string): { title: string; courseCode: string } => {
   const cleaned = cleanTitle(rawName);
   const match = cleaned.match(COURSE_CODE_PATTERN);
@@ -120,27 +120,21 @@ const extractTitleAndCode = (rawName: string): { title: string; courseCode: stri
 
   const courseCode = `${match[1].toUpperCase()}${match[2]}`;
 
-  // Remove the matched course code text from the title, then trim any
-  // leftover connector words/punctuation at the boundary (e.g. "by", "-", ":")
   const titleWithoutCode = cleaned
     .slice(0, match.index) + cleaned.slice((match.index ?? 0) + match[0].length);
 
   const title = titleWithoutCode
-    .replace(/^[\s,:.\-]+/, "")   // leading leftover punctuation/space
-    .replace(/[\s,:.\-]+$/, "")   // trailing leftover punctuation/space
+    .replace(/^[\s,:.\-]+/, "")   
+    .replace(/[\s,:.\-]+$/, "")   
     .replace(/\s{2,}/g, " ")
     .trim();
 
   return {
     courseCode,
-    // If stripping the course code leaves nothing useful, fall back to the full cleaned name
     title: title.length >= 3 ? title : cleaned,
   };
 };
 
-// Build the initial per-file metadata map for unrelated/standalone mode.
-// Each file gets its own guessed title + course code (course code stripped
-// out of the title so they don't duplicate each other), fully editable later.
 const buildFileMetadata = (files: DriveFile[]): Record<string, { title: string; courseCode: string }> => {
   const map: Record<string, { title: string; courseCode: string }> = {};
   for (const f of files) {
@@ -149,7 +143,6 @@ const buildFileMetadata = (files: DriveFile[]): Record<string, { title: string; 
   return map;
 };
 
-// Detect if a folder name or filename suggests it contains past questions
 const detectsPastQuestion = (name: string): boolean => {
   const lower = name.toLowerCase();
   return (
@@ -165,9 +158,6 @@ const detectsPastQuestion = (name: string): boolean => {
   );
 };
 
-// ─── Call the Edge Function to import one group ───────────────────────────────
-// The Edge Function downloads files from Drive server-side and uploads to Supabase.
-// It processes files one by one and returns per-file results.
 const importGroupViaEdgeFunction = async (
   pdfId: string,
   files: DriveFile[],
@@ -175,7 +165,6 @@ const importGroupViaEdgeFunction = async (
   onFileComplete: (fileName: string, success: boolean, error?: string) => void
 ): Promise<{ success: number; failed: number }> => {
 
-  // Call edge function with all files — it handles them sequentially server-side
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) throw new Error("Not authenticated");
@@ -204,7 +193,6 @@ const importGroupViaEdgeFunction = async (
 
   const result = await response.json();
 
-  // Report per-file results back to the UI
   if (Array.isArray(result.results)) {
     for (const r of result.results) {
       onFileComplete(r.name, r.success, r.error);
@@ -214,12 +202,8 @@ const importGroupViaEdgeFunction = async (
   return { success: result.success || 0, failed: result.failed || 0 };
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
 export const DriveImport = () => {
   const { user } = useAuth();
-  // Defaults to open — the parent (AdminPdfs) only mounts this component
-  // when the rep explicitly chose "Import from Drive", so no need for a
-  // second collapse/expand step here.
   const [open, setOpen] = useState(true);
   const [link, setLink] = useState("");
   const [fetching, setFetching] = useState(false);
@@ -229,7 +213,6 @@ export const DriveImport = () => {
   const [importing, setImporting] = useState(false);
   const [defaultLevel, setDefaultLevel] = useState("100L");
 
-  // Per-file status for the review/progress panel
   const [fileStatus, setFileStatus] = useState<Record<string, "pending" | "done" | "failed">>({});
   const [currentFile, setCurrentFile] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<{ success: number; failed: number } | null>(null);
@@ -262,6 +245,7 @@ export const DriveImport = () => {
           isPastQuestion: detectsPastQuestion(file.name),
           isRelated: true, // single file — naturally one subject
           fileMetadata: buildFileMetadata([file]),
+          isVerified: false,
         }]);
 
       } else {
@@ -285,14 +269,11 @@ export const DriveImport = () => {
             level: defaultLevel,
             enabled: true,
             isPastQuestion: false,
-            // Default to "not related" — a flat folder full of PDFs is more often
-            // a mixed bag of unrelated materials than one course's chapters.
-            // The rep can flip this toggle if they ARE all one subject.
             isRelated: false,
             fileMetadata: buildFileMetadata(directPdfs),
+            isVerified: false,
           }]);
         } else {
-          // Multi-subfolder structure
           setHasSubfolders(true);
           setMode("grouped");
 
@@ -322,6 +303,7 @@ export const DriveImport = () => {
               isPastQuestion: false,
               isRelated: false, // root-level loose files — likely unrelated
               fileMetadata: buildFileMetadata(directPdfs),
+              isVerified: false,
             });
           }
 
@@ -340,6 +322,7 @@ export const DriveImport = () => {
               // A named subfolder usually IS one subject's chapters (e.g. "MTH201/")
               isRelated: true,
               fileMetadata: buildFileMetadata(files),
+              isVerified: false,
             });
           }
 
@@ -447,8 +430,8 @@ export const DriveImport = () => {
             course_code: group.courseCode.trim().toUpperCase(),
             level: group.level as any,
             department: null, faculty: null, description: null, cover_url: null,
-            tags: [], is_verified: false,
-            is_general: false,           // modular = has multiple named chapters
+            tags: [], is_verified: group.isVerified,
+            is_general: false,
             is_past_question: group.isPastQuestion,
             total_chapters: 0,
             uploader_id: user.id,
@@ -499,8 +482,8 @@ export const DriveImport = () => {
               course_code: meta.courseCode.trim().toUpperCase(),
               level: group.level as any,
               department: null, faculty: null, description: null, cover_url: null,
-              tags: [], is_verified: false,
-              is_general: true,            // standalone = single PDF, no chapter list shown
+              tags: [], is_verified: group.isVerified,
+              is_general: true,
               is_past_question: group.isPastQuestion,
               total_chapters: 0,
               uploader_id: user.id,
@@ -855,7 +838,6 @@ export const DriveImport = () => {
                     </select>
                   </Field>
 
-                  {/* Past question toggle — auto-detected but rep can override */}
                   <button
                     onClick={() => updateGroup(gi, { isPastQuestion: !group.isPastQuestion })}
                     disabled={importing}
@@ -880,6 +862,27 @@ export const DriveImport = () => {
                         Auto-detected
                       </span>
                     )}
+                  </button>
+
+                  <button
+                    onClick={() => updateGroup(gi, { isVerified: !group.isVerified })}
+                    disabled={importing}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                      group.isVerified
+                        ? "bg-green-500/10 border-green-500/30 text-green-600"
+                        : "bg-surface border-border text-muted-foreground"
+                    }`}
+                  >
+                    {group.isVerified
+                      ? <CheckSquare className="h-3.5 w-3.5 shrink-0" />
+                      : <Square className="h-3.5 w-3.5 shrink-0" />
+                    }
+                    <span>
+                      {group.isVerified
+                        ? "✅ Marked as Rep Verified"
+                        : "Mark as Rep Verified"
+                      }
+                    </span>
                   </button>
                 </div>
               )}
