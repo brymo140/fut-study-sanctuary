@@ -6,13 +6,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
+import { DownloadManagerProvider } from "@/contexts/DownloadManagerContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { MaintenanceGate } from "@/components/MaintenanceGate";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SplashLoader } from "@/components/SplashLoader";
-
+import { PdfViewer } from "@/components/PdfViewer";
 
 const PushNavigator = () => {
   const navigate = useNavigate();
@@ -25,6 +26,29 @@ const PushNavigator = () => {
     return () => window.removeEventListener('hv:navigate', handler);
   }, [navigate]);
   return null;
+};
+
+const ExternalPdfListener = () => {
+  const [path, setPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const p = (e as CustomEvent).detail?.path;
+      if (p) setPath(p);
+    };
+    window.addEventListener('hv:openExternalPdf', handler);
+    return () => window.removeEventListener('hv:openExternalPdf', handler);
+  }, []);
+
+  return (
+    <PdfViewer
+      open={!!path}
+      onOpenChange={(v) => !v && setPath(null)}
+      storagePath={null}
+      externalFileUri={path}
+      title="Opened file"
+    />
+  );
 };
 
 import Welcome from "./pages/Welcome";
@@ -78,8 +102,10 @@ const App = () => {
           <OfflineBanner />
           <BrowserRouter>
             <PushNavigator />
+            <ExternalPdfListener />
             <AuthProvider>
               <SettingsProvider>
+                <DownloadManagerProvider>
                 <Routes>
                   <Route path="/welcome" element={<Welcome />} />
                   <Route path="/signup" element={<Signup />} />
@@ -101,6 +127,7 @@ const App = () => {
 
                   <Route path="*" element={<NotFound />} />
                 </Routes>
+                </DownloadManagerProvider>
               </SettingsProvider>
             </AuthProvider>
           </BrowserRouter>
