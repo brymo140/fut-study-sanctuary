@@ -8,7 +8,7 @@ import { WatchToUnlockModal } from "@/components/WatchToUnlockModal";
 import { PdfViewer } from "@/components/PdfViewer";
 import { toast } from "sonner";
 import { isModuleUnlocked, markModuleUnlocked } from "@/lib/sessionUnlocks";
-import { savePdfToDevice } from "@/lib/deviceFiles";
+import { savePdfToDevice, openWithSystemChooser } from "@/lib/deviceFiles";
 
 const DL_PREFIX = "hv_dl_";
 
@@ -40,7 +40,6 @@ const PdfDetail = () => {
   const [loading, setLoading] = useState(true);
   const [downloadedChapterIds, setDownloadedChapterIds] = useState<Set<string>>(new Set());
   const [downloadingChapter, setDownloadingChapter] = useState<string | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState(0);
   const [, setTick] = useState(0);
   const [iosPdfUrl, setIosPdfUrl] = useState<string | null>(null);
 
@@ -171,17 +170,12 @@ const PdfDetail = () => {
     setTick((t) => t + 1);
 
     const fileName = fileNameForChapter(ch);
-    setDownloadProgress(0);
     setDownloadingChapter(ch.id);
 
     try {
-      setDownloadProgress(30);
-
       const { data: urlData } = supabase.storage
         .from("chapters")
         .getPublicUrl(ch.storage_path);
-
-      setDownloadProgress(70);
 
       const safeFileName = await savePdfToDevice(urlData.publicUrl, fileName);
       localStorage.setItem(`${DL_PREFIX}${ch.id}`, safeFileName);
@@ -210,25 +204,13 @@ const PdfDetail = () => {
         console.error("[PdfDetail] XP update failed", xpErr);
       }
 
-      setDownloadProgress(100);
       setDownloadedChapterIds((prev) => new Set([...prev, ch.id]));
-
-      setTimeout(() => {
-        setDownloadingChapter(null);
-        toast.success("✅ Saved to your library!");
-      }, 500);
-
-      // Open PDF after download
-      if (ios) {
-        await openIosPdf(ch);
-      } else {
-        setViewChapter(ch);
-      }
-
+      toast.success("Download finished — saved to your library");
     } catch (error) {
       console.error("Download failed:", error);
-      setDownloadingChapter(null);
       toast.error("Download failed. Please try again.");
+    } finally {
+      setDownloadingChapter(null);
     }
   };
 
@@ -236,6 +218,11 @@ const PdfDetail = () => {
     if (ios) {
       await openIosPdf(ch);
       return;
+    }
+    const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
+    if (cachedFile) {
+      const success = await openWithSystemChooser(cachedFile);
+      if (success) return;
     }
     setViewChapter(ch);
   };
@@ -440,6 +427,10 @@ const PdfDetail = () => {
                           <BookOpen className="h-3 w-3 mr-1" />
                           {ios ? 'Open PDF' : 'Read 📖'}
                         </Button>
+                      ) : downloadingChapter === ch.id ? (
+                        <Button size="sm" disabled className="bg-surface border border-border text-xs h-8 w-8 p-0">
+                          <span className="h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                        </Button>
                       ) : (
                         <Button
                           size="sm"
@@ -564,31 +555,6 @@ const PdfDetail = () => {
         chapterId={viewChapter?.id}
         title={viewChapter ? `M${viewChapter.chapter_number} · ${viewChapter.title}` : undefined}
       />
-
-      {/* Download Progress Overlay */}
-      {downloadingChapter && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-md" />
-          <div className="relative w-full max-w-sm surface-elevated p-6 rounded-2xl">
-            <div className="flex flex-col items-center py-4">
-              <div className="h-12 w-12 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4" />
-              <p className="text-sm font-semibold mb-2">Downloading module...</p>
-              <div className="w-full bg-muted rounded-full h-2 mb-2">
-                <div
-                  className="bg-primary h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${downloadProgress}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-muted-foreground text-center">
-                {downloadProgress < 30 && "Preparing download..."}
-                {downloadProgress >= 30 && downloadProgress < 70 && "Fetching PDF..."}
-                {downloadProgress >= 70 && downloadProgress < 100 && "Saving..."}
-                {downloadProgress === 100 && "Almost done!"}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
