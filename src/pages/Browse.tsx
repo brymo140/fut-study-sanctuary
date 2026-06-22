@@ -6,25 +6,15 @@ import { PdfCard, PdfSummary } from "@/components/PdfCard";
 const LEVELS = ["All", "100L", "200L", "300L", "400L", "500L"];
 type Tab = "materials" | "past";
 
-// Stable per-mount shuffle so users see the same random ordering until they
-// switch tabs / refilter.
-const shuffle = <T,>(arr: T[]) => {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-};
-
 const Browse = () => {
   const HISTORY_KEY = "hv_search_history";
   const [tab, setTab] = useState<Tab>("materials");
   const [level, setLevel] = useState("All");
   const [pdfs, setPdfs] = useState<PdfSummary[]>([]);
+  const [searchResults, setSearchResults] = useState<PdfSummary[]>([]);
+  const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Search is hidden by default — opens via the magnifying-glass button.
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -41,22 +31,40 @@ const Browse = () => {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      let q = supabase.from("pdfs").select("*").limit(80);
-      q = q.eq("is_past_question", tab === "past");
-      if (level !== "All") q = q.eq("level", level as "100L");
-      const { data } = await q;
-      setPdfs(shuffle((data as PdfSummary[]) || []));
+      const { data } = await supabase.rpc("get_random_pdfs", {
+        p_is_past_question: tab === "past",
+        p_level: level === "All" ? null : level,
+        p_limit: 50,
+      });
+      setPdfs((data as PdfSummary[]) || []);
       setLoading(false);
     };
     load();
   }, [tab, level]);
 
-  const filtered = search
-    ? pdfs.filter((p) =>
-        p.title.toLowerCase().includes(search.toLowerCase()) ||
-        p.course_code.toLowerCase().includes(search.toLowerCase())
-      )
-    : pdfs;
+  useEffect(() => {
+    const term = search.trim();
+    if (!term) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      let q = supabase
+        .from("pdfs")
+        .select("*")
+        .eq("is_past_question", tab === "past")
+        .or(`title.ilike.%${term}%,course_code.ilike.%${term}%`)
+        .limit(100);
+      if (level !== "All") q = q.eq("level", level as "100L");
+      const { data } = await q;
+      setSearchResults((data as PdfSummary[]) || []);
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search, tab, level]);
+
+  const filtered = search.trim() ? searchResults : pdfs;
 
   const persistHistory = (term: string) => {
     const clean = term.trim();
@@ -178,10 +186,16 @@ const Browse = () => {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {searching ? (
+        <div className="space-y-2.5">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="surface-card p-3 animate-pulse h-24" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="surface-card p-8 text-center text-sm text-muted-foreground">
           <SlidersHorizontal className="h-6 w-6 mx-auto mb-2 opacity-60" />
-          Nothing matches your filters.
+          {search.trim() ? "No results found." : "Nothing matches your filters."}
         </div>
       ) : (
         <div className="space-y-2.5">
