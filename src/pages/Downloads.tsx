@@ -4,11 +4,12 @@ import { FileText, BookOpen, Bookmark, Download, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { PdfViewer } from "@/components/PdfViewer";
-import { isModuleUnlocked, markModuleUnlocked } from "@/lib/sessionUnlocks";
+import { isModuleUnlocked } from "@/lib/sessionUnlocks";
 import { WatchToUnlockModal } from "@/components/WatchToUnlockModal";
-import { savePdfToDevice } from "@/lib/deviceFiles";
 import { Confetti } from "@/components/ads/Confetti";
 import { toast } from "sonner";
+import { useDownloadManager } from "@/contexts/DownloadManagerContext";
+import { openWithSystemChooser } from "@/lib/deviceFiles";
 
 interface Chapter {
   id: string;
@@ -56,12 +57,6 @@ const loadLocalPaths = (): Record<string, string> => {
   } catch {
     return {};
   }
-};
-
-const saveLocalPath = (chapterId: string, uri: string) => {
-  const all = loadLocalPaths();
-  all[chapterId] = uri;
-  localStorage.setItem(LOCAL_PATHS_KEY, JSON.stringify(all));
 };
 
 // ─── Chapter manifest: saved on every successful network fetch ────────────────
@@ -140,9 +135,8 @@ const Downloads = () => {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [view, setView] = useState<{ ch: Chapter; subject: Subject; storagePath: string } | null>(null);
   const [unlock, setUnlock] = useState<{ ch: Chapter; subject: Subject } | null>(null);
-  const [downloading, setDownloading] = useState<string | null>(null);
+  const { startDownload, isDownloading, onComplete } = useDownloadManager();
   const [confetti, setConfetti] = useState(false);
-  // loading = true only when we have NO cache at all and are waiting for network
   const [loading, setLoading] = useState(() => loadCachedGroups().length === 0 && loadCachedBookmarks().length === 0);
   const [iosPdfUrl, setIosPdfUrl] = useState<string | null>(null);
 
@@ -259,44 +253,27 @@ const Downloads = () => {
     load();
   }, [user]);
 
-  const completeDownload = async () => {
+  useEffect(() => onComplete(() => load()), [onComplete]);
+
+  const completeDownload = () => {
     if (!unlock || !user) return;
     const { ch, subject } = unlock;
     setUnlock(null);
-    setDownloading(ch.id);
-    try {
-      const { data } = supabase.storage.from("chapters").getPublicUrl(ch.storage_path);
-      const fileName = `${subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`;
-      const uri = await savePdfToDevice(data.publicUrl, fileName);
-      localStorage.setItem(`${DL_PREFIX}${ch.id}`, fileName);
-      saveLocalPath(ch.id, uri);
 
-      const { error: dlErr } = await supabase.from("downloads").insert({
-        user_id: user.id,
-        chapter_id: ch.id,
-        pdf_id: subject.id,
-        downloaded_at: new Date().toISOString(),
-      });
+    const fileName = `${subject.course_code}-M${ch.chapter_number}-${ch.title}.pdf`;
+    startDownload(
+      {
+        chapterId: ch.id,
+        subjectId: subject.id,
+        storagePath: ch.storage_path,
+        fileName,
+        courseCode: subject.course_code,
+      },
+      user.id
+    );
 
-      if (dlErr) {
-        console.error("[Downloads] insert failed, retrying without downloaded_at:", dlErr);
-        await supabase.from("downloads").insert({
-          user_id: user.id,
-          chapter_id: ch.id,
-          pdf_id: subject.id,
-        });
-      }
-      markModuleUnlocked(ch.id);
-      toast.success("✅ Saved to your library!");
-      setConfetti(true);
-      setTimeout(() => setConfetti(false), 1500);
-      await load();
-    } catch (e) {
-      console.error(e);
-      toast.error("Couldn't save the file. Try again.");
-    } finally {
-      setDownloading(null);
-    }
+    setConfetti(true);
+    setTimeout(() => setConfetti(false), 1500);
   };
 
   const handleReadChapter = async (ch: Chapter, subject: Subject) => {
@@ -338,6 +315,12 @@ const Downloads = () => {
         toast.error("Could not open PDF.");
       }
       return;
+    }
+
+    const cachedFile = localStorage.getItem(`${DL_PREFIX}${ch.id}`);
+    if (cachedFile) {
+      const success = await openWithSystemChooser(cachedFile);
+      if (success) return;
     }
     setView({ ch, subject, storagePath: ch.storage_path });
   };
@@ -428,7 +411,7 @@ const Downloads = () => {
                   <div className="border-t border-border px-3 py-2 space-y-2">
                     {g.chapters.map((ch) => {
                       const isDownloaded = g.downloadedChapterIds.has(ch.id);
-                      const isBusy = downloading === ch.id;
+                      const isBusy = isDownloading(ch.id);
                       return (
                         <div key={ch.id} className="flex items-center gap-3 py-1.5">
                           <div className="h-9 w-9 shrink-0 rounded-md bg-muted flex items-center justify-center text-[11px] font-bold text-muted-foreground">
